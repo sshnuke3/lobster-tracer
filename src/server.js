@@ -5,7 +5,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { initDB, listSessions, getSession, getStats } from './db.js';
+import { initDB, listSessions, getSession, getStats, deleteSession, insertSession, insertEvent } from './db.js';
 import { handleProxy } from './proxy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -44,6 +44,31 @@ app.get('/sessions/:id', (req, res) => {
   const result = getSession(req.params.id);
   if (!result) return res.status(404).json({ error: 'session not found' });
   res.json(result);
+});
+
+// D3.5: DELETE /sessions/:id 级联删 session + events
+app.delete('/sessions/:id', (req, res) => {
+  const result = getSession(req.params.id);
+  if (!result) return res.status(404).json({ error: 'session not found' });
+  const r = deleteSession(req.params.id);
+  res.json({ ok: true, deleted: r });
+});
+
+// D3.5: POST /sessions/:id/replay 用历史 prompt + model + metadata 再发一次
+app.post('/sessions/:id/replay', async (req, res) => {
+  const result = getSession(req.params.id);
+  if (!result) return res.status(404).json({ error: 'session not found' });
+  const s = result.session;
+  // 复制原始 prompt + model + metadata
+  const originalMeta = s.metadata ? (() => { try { return JSON.parse(s.metadata); } catch { return {}; } })() : {};
+  req.body = {
+    model: s.model || 'qwen3.6-flash',
+    messages: [{ role: 'user', content: s.prompt }],
+    stream: req.body?.stream ?? false,
+    metadata: { ...originalMeta, replay_from: s.id, replay_at: new Date().toISOString() }
+  };
+  // 复用 D2 Stream Proxy
+  return handleProxy(req, res);
 });
 
 // D2: Stream Proxy 路由

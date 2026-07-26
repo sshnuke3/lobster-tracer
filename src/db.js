@@ -79,6 +79,15 @@ export function failSession({ sessionId, error }) {
   `).run(error, new Date().toISOString(), sessionId);
 }
 
+// D3.5: 删除 session(级联删 events)
+export function deleteSession(id) {
+  const result = db.prepare('DELETE FROM events WHERE session_id = ?').run(id);
+  const eventsDeleted = result.changes;
+  const r2 = db.prepare('DELETE FROM sessions WHERE id = ?').run(id);
+  const sessionDeleted = r2.changes;
+  return { sessionDeleted, eventsDeleted };
+}
+
 // 查询 sessions
 export function listSessions(limit = 50) {
   return db.prepare(`

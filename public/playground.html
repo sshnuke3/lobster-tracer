@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>🦞 Lobster-Tracer · Stream Proxy Playground (D2)</title>
+  <title>🦞 Lobster-Tracer · Stream Proxy Playground (D3)</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -34,61 +34,379 @@
              font-weight: 600; margin-right: 6px; }
     .badge.ok { background: #C8E6E2; color: #2A4A48; }
     .badge.err { background: #FFD9C0; color: #8B4513; }
+
+    /* D3 新增 tab 样式 */
+    .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+    .tab { padding: 8px 16px; border-radius: 6px 6px 0 0; cursor: pointer;
+           font-size: 13px; font-weight: 600; background: rgba(255,255,255,0.6); color: #666; }
+    .tab.active { background: white; color: #FF8B94; border-bottom: 2px solid #FF8B94; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* 会话列表 */
+    .session-list { max-height: 400px; overflow-y: auto; }
+    .session-item { padding: 12px; border: 1px solid #E0E0E0; border-radius: 6px;
+                    margin-bottom: 8px; cursor: pointer; background: white; transition: all 0.15s; }
+    .session-item:hover { border-color: #FF8B94; transform: translateX(2px); }
+    .session-item.selected { border-color: #FF8B94; background: #FFF8F2; }
+    .session-item .id { font-family: monospace; font-size: 11px; color: #888; }
+    .session-item .model { font-weight: 600; color: #2A4A48; }
+    .session-item .status { float: right; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+    .session-item .status.completed { background: #C8E6E2; color: #2A4A48; }
+    .session-item .status.running { background: #FFE082; color: #6B5A00; }
+    .session-item .status.failed { background: #FFD9C0; color: #8B4513; }
+    .session-item .prompt { font-size: 13px; color: #555; margin-top: 4px;
+                            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* 会话详情 */
+    .session-detail { padding: 16px; background: white; border-radius: 6px; }
+    .session-detail h3 { font-size: 14px; margin: 12px 0 8px 0; color: #2A4A48; }
+    .session-detail h3:first-child { margin-top: 0; }
+    .session-detail .info-grid { display: grid; grid-template-columns: max-content 1fr;
+                                  gap: 6px 12px; font-size: 13px; }
+    .session-detail .info-grid label { margin: 0; padding: 0; font-size: 12px; }
+    .session-detail .info-grid span { color: #2A2A2A; }
+
+    /* Events 时间线 */
+    .timeline { margin-top: 12px; }
+    .timeline-event { padding: 8px 12px; border-left: 3px solid #C8E6E2;
+                       margin-bottom: 4px; background: #FAFAFA; border-radius: 0 4px 4px 0; }
+    .timeline-event.chunk { border-left-color: #FF8B94; }
+    .timeline-event.state { border-left-color: #FFD9C0; }
+    .timeline-event.error { border-left-color: #FF5252; }
+    .timeline-event .time { font-size: 11px; color: #888; font-family: monospace; }
+    .timeline-event .type { font-weight: 600; color: #2A4A48; margin-right: 8px; }
+    .timeline-event .delta { color: #FF8B94; font-size: 11px; }
+
+    .empty { text-align: center; padding: 40px; color: #999; font-size: 13px; }
+    .refresh-btn { float: right; padding: 4px 12px; font-size: 12px;
+                   background: #C8E6E2; color: #2A4A48; border: none; border-radius: 4px; cursor: pointer; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>🦞 Lobster-Tracer Playground</h1>
-    <div class="subtitle">D2 测试页 · 通过 /proxy/v1/chat/completions 调 OpenAI · 自动落 SQLite · 显示流式响应</div>
+    <div class="subtitle">D2 测试页 + D3 会话历史 · 通过 /proxy/v1/chat/completions 调 OpenAI · 自动落 SQLite · 显示流式响应</div>
 
-    <div class="panel">
-      <h2>📝 请求参数</h2>
-      <label>模型</label>
-      <select id="model">
-        <option value="qwen3.6-flash" selected>qwen3.6-flash (默认)</option>
-        <option value="qwen3.7-plus">qwen3.7-plus</option>
-        <option value="qwen-turbo">qwen-turbo</option>
-        <option value="qwen-plus">qwen-plus</option>
-        <option value="qwen-max">qwen-max</option>
-        <option value="gpt-4o-mini">gpt-4o-mini</option>
-        <option value="gpt-4o">gpt-4o</option>
-        <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
-      </select>
-
-      <label>系统提示</label>
-      <textarea id="system">你是一个简单的助手,用一句话回答用户问题。</textarea>
-
-      <label>用户消息</label>
-      <textarea id="user">用一句话解释什么是 Lobster-Tracer?</textarea>
-
-      <button class="btn-primary" onclick="sendRequest(true)">🚀 流式调用</button>
-      <button class="btn-secondary" onclick="sendRequest(false)">📦 非流式调用</button>
+    <div class="tabs">
+      <div class="tab active" data-tab="play" onclick="switchTab('play')">🚀 实时调用</div>
+      <div class="tab" data-tab="history" onclick="switchTab('history')">📜 会话历史</div>
     </div>
 
-    <div class="panel">
-      <h2>📡 响应输出</h2>
-      <div id="output" class="output">(等待发送...)</div>
-      <div class="meta">
-        <span class="badge ok" id="metaSession">Session: -</span>
-        <span class="badge ok" id="metaChunks">Chunks: 0</span>
-        <span class="badge ok" id="metaDuration">Duration: -</span>
+    <div id="play" class="tab-content active">
+      <div class="panel">
+        <h2>📝 请求参数</h2>
+        <label>模型</label>
+        <select id="model">
+          <option value="qwen3.6-flash" selected>qwen3.6-flash (默认)</option>
+          <option value="qwen3.7-plus">qwen3.7-plus</option>
+          <option value="qwen-turbo">qwen-turbo</option>
+          <option value="qwen-plus">qwen-plus</option>
+          <option value="qwen-max">qwen-max</option>
+          <option value="gpt-4o-mini">gpt-4o-mini</option>
+          <option value="gpt-4o">gpt-4o</option>
+          <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+        </select>
+
+        <label>系统提示</label>
+        <textarea id="system">你是一个简单的助手,用一句话回答用户问题。</textarea>
+
+        <label>用户消息</label>
+        <textarea id="user">用一句话解释什么是 Lobster-Tracer?</textarea>
+
+        <button class="btn-primary" onclick="sendRequest(true)">🚀 流式调用</button>
+        <button class="btn-secondary" onclick="sendRequest(false)">📦 非流式调用</button>
+      </div>
+
+      <div class="panel">
+        <h2>📡 响应输出</h2>
+        <div id="output" class="output">(等待发送...)</div>
+        <div class="meta">
+          <span class="badge ok" id="metaSession">Session: -</span>
+          <span class="badge ok" id="metaChunks">Chunks: 0</span>
+          <span class="badge ok" id="metaDuration">Duration: -</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>🔍 怎么验证落库</h2>
+        <p style="font-size: 13px; line-height: 1.6; color: #555;">
+          调用完成后,切换到「📜 会话历史」tab,或在新终端跑:<br>
+          <code>curl https://lobster-tracer-production.up.railway.app/sessions</code><br>
+          应该看到刚生成的会话(含 model / status / duration / token 信息)。<br>
+        </p>
       </div>
     </div>
 
-    <div class="panel">
-      <h2>🔍 怎么验证落库</h2>
-      <p style="font-size: 13px; line-height: 1.6; color: #555;">
-        调用完成后,在另一终端跑:<br>
-        <code>curl https://lobster-tracer-production.up.railway.app/sessions</code><br>
-        应该看到刚生成的会话(含 model / status / duration / token 信息)。<br>
-        详细 events 流:<br>
-        <code>curl https://lobster-tracer-production.up.railway.app/sessions/&lt;session-id&gt;</code>
-      </p>
+    <div id="history" class="tab-content">
+      <div class="panel">
+        <h2>📜 会话历史 <button class="refresh-btn" onclick="refreshSessions()">🔄 刷新</button></h2>
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+          <input id="searchBox" placeholder="🔍 搜索 prompt (按 model 过滤可手动刷新选)"
+                 oninput="filterSessions()" style="flex:1;margin-bottom:0;">
+          <select id="modelFilter" onchange="filterSessions()" style="width:auto;margin-bottom:0;">
+            <option value="">全部模型</option>
+            <option value="qwen3.6-flash">qwen3.6-flash</option>
+            <option value="qwen3.7-plus">qwen3.7-plus</option>
+            <option value="qwen-turbo">qwen-turbo</option>
+            <option value="qwen-plus">qwen-plus</option>
+            <option value="qwen-max">qwen-max</option>
+          </select>
+        </div>
+        <div id="sessionList" class="session-list">
+          <div class="empty">加载中...</div>
+        </div>
+        <div id="pagination" style="text-align:center;margin-top:12px;">
+          <button class="refresh-btn" onclick="loadMore()" id="loadMoreBtn" style="display:none;">📦 加载更多 (20+)</button>
+        </div>
+      </div>
+
+      <div class="panel" id="detailPanel" style="display:none;">
+        <h2>🔍 会话详情 <span style="float:right;font-size:12px;">
+          <button class="btn-secondary" style="padding:4px 12px;font-size:12px;margin-right:4px;" onclick="replaySession()">🔁 重放</button>
+          <button class="btn-secondary" style="padding:4px 12px;font-size:12px;background:#FFD9C0;color:#8B4513;" onclick="deleteSession()">🗑️ 删除</button>
+        </span></h2>
+        <div id="sessionDetail" class="session-detail"></div>
+      </div>
     </div>
   </div>
 
 <script>
 let chunkCount = 0;
+let currentSessions = [];
+let selectedSessionId = null;
+let sessionOffset = 0;
+const PAGE_SIZE = 20;
+
+function filterSessions() {
+  const kw = (document.getElementById('searchBox').value || '').toLowerCase();
+  const model = document.getElementById('modelFilter').value;
+  const filtered = currentSessions.filter(s => {
+    const matchKw = !kw || (s.prompt || '').toLowerCase().includes(kw);
+    const matchModel = !model || s.model === model;
+    return matchKw && matchModel;
+  });
+  const list = document.getElementById('sessionList');
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty">没有匹配的会话 · 清空搜索试试</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(s => {
+    const prompt = (s.prompt || '').replace(/</g, '&lt;').slice(0, 60);
+    const startedAt = s.started_at ? new Date(s.started_at).toLocaleString('zh-CN') : '-';
+    const selectedClass = s.id === selectedSessionId ? ' selected' : '';
+    return `
+      <div class="session-item${selectedClass}" onclick="loadSessionDetail('${s.id}')">
+        <div>
+          <span class="id">${s.id.slice(0, 8)}...</span>
+          <span class="status ${s.status}">${s.status}</span>
+        </div>
+        <div>
+          <span class="model">${s.model || '?'}</span> ·
+          <span style="font-size:11px;color:#888;">${startedAt}</span> ·
+          <span style="font-size:11px;color:#888;">${s.duration_ms || 0}ms</span>
+          ${s.prompt_tokens ? `· <span style="font-size:11px;color:#888;">${s.prompt_tokens}+${s.completion_tokens} tok</span>` : ''}
+        </div>
+        <div class="prompt">${prompt}${prompt.length >= 60 ? '...' : ''}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadMore() {
+  sessionOffset += PAGE_SIZE;
+  try {
+    const resp = await fetch(`/sessions?limit=${PAGE_SIZE}&offset=${sessionOffset}`);
+    const data = await resp.json();
+    if (data.sessions.length === 0) {
+      document.getElementById('loadMoreBtn').style.display = 'none';
+      return;
+    }
+    currentSessions = currentSessions.concat(data.sessions);
+    filterSessions();
+  } catch (err) {
+    console.error('loadMore error:', err);
+  }
+}
+
+async function deleteSession() {
+  if (!selectedSessionId) return;
+  if (!confirm('确认删除会话 ' + selectedSessionId.slice(0, 8) + '...(级联删除 events)?')) return;
+  try {
+    const resp = await fetch(`/sessions/${selectedSessionId}`, { method: 'DELETE' });
+    const data = await resp.json();
+    if (data.ok) {
+      alert(`✅ 已删除 ${data.deleted.sessionDeleted} session + ${data.deleted.eventsDeleted} events`);
+      selectedSessionId = null;
+      document.getElementById('detailPanel').style.display = 'none';
+      refreshSessions();
+    } else {
+      alert('❌ 删除失败: ' + (data.error || 'unknown'));
+    }
+  } catch (err) {
+    alert('❌ 网络错误: ' + err.message);
+  }
+}
+
+async function replaySession() {
+  if (!selectedSessionId) return;
+  if (!confirm('重放这次会话? 会发一次新的 LLM 调用 (用原 prompt + model)')) return;
+  try {
+    const resp = await fetch(`/sessions/${selectedSessionId}/replay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stream: false })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const newId = resp.headers.get('X-Session-Id') || '(新会话已落库)';
+      alert(`✅ 重放成功,新会话 ID: ${(newId || '').slice(0, 8)}...\n\n响应预览: ` + JSON.stringify(data).slice(0, 200));
+      refreshSessions();
+    } else {
+      const err = await resp.json();
+      alert('❌ 重放失败: ' + (err.error || JSON.stringify(err)));
+    }
+  } catch (err) {
+    alert('❌ 网络错误: ' + err.message);
+  }
+}
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+
+  if (tabId === 'history') refreshSessions();
+}
+
+async function refreshSessions() {
+  const list = document.getElementById('sessionList');
+  list.innerHTML = '<div class="empty">⏳ 加载中...</div>';
+  try {
+    const resp = await fetch('/sessions?limit=20');
+    const data = await resp.json();
+    currentSessions = data.sessions || [];
+    renderSessionList();
+  } catch (err) {
+    list.innerHTML = `<div class="empty">❌ 加载失败: ${err.message}</div>`;
+  }
+}
+
+function renderSessionList() {
+  const list = document.getElementById('sessionList');
+  if (currentSessions.length === 0) {
+    list.innerHTML = '<div class="empty">暂无会话 · 切回「🚀 实时调用」发一条试试</div>';
+    return;
+  }
+  list.innerHTML = currentSessions.map(s => {
+    const prompt = (s.prompt || '').replace(/</g, '&lt;').slice(0, 60);
+    const startedAt = s.started_at ? new Date(s.started_at).toLocaleString('zh-CN') : '-';
+    const selectedClass = s.id === selectedSessionId ? ' selected' : '';
+    return `
+      <div class="session-item${selectedClass}" onclick="loadSessionDetail('${s.id}')">
+        <div>
+          <span class="id">${s.id.slice(0, 8)}...</span>
+          <span class="status ${s.status}">${s.status}</span>
+        </div>
+        <div>
+          <span class="model">${s.model || '?'}</span> ·
+          <span style="font-size:11px;color:#888;">${startedAt}</span> ·
+          <span style="font-size:11px;color:#888;">${s.duration_ms || 0}ms</span>
+          ${s.prompt_tokens ? `· <span style="font-size:11px;color:#888;">${s.prompt_tokens}+${s.completion_tokens} tok</span>` : ''}
+        </div>
+        <div class="prompt">${prompt}${prompt.length >= 60 ? '...' : ''}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadSessionDetail(sessionId) {
+  selectedSessionId = sessionId;
+  renderSessionList();
+  const detailPanel = document.getElementById('detailPanel');
+  const detail = document.getElementById('sessionDetail');
+  detailPanel.style.display = 'block';
+  detail.innerHTML = '<div class="empty">⏳ 加载中...</div>';
+
+  try {
+    const resp = await fetch(`/sessions/${sessionId}`);
+    const data = await resp.json();
+    renderSessionDetail(data);
+  } catch (err) {
+    detail.innerHTML = `<div class="empty">❌ 加载失败: ${err.message}</div>`;
+  }
+}
+
+function renderSessionDetail(data) {
+  const detail = document.getElementById('sessionDetail');
+  const session = data.session || data;
+  const events = data.events || [];
+  const s = session;
+
+  const startedAt = s.started_at ? new Date(s.started_at).toLocaleString('zh-CN') : '-';
+  const finishedAt = s.finished_at ? new Date(s.finished_at).toLocaleString('zh-CN') : '-';
+
+  let html = `
+    <h3>📋 基本信息</h3>
+    <div class="info-grid">
+      <label>ID:</label><span style="font-family:monospace;font-size:11px;">${s.id}</span>
+      <label>Model:</label><span><strong>${s.model || '?'}</strong></span>
+      <label>Status:</label><span><span class="status ${s.status}">${s.status}</span></span>
+      <label>Project:</label><span>${s.project || '-'}</span>
+      <label>Phase:</label><span>${s.phase || '-'}</span>
+      <label>Started:</label><span>${startedAt}</span>
+      <label>Finished:</label><span>${finishedAt}</span>
+      <label>Duration:</label><span><strong>${s.duration_ms || 0}</strong> ms</span>
+      <label>Tokens:</label><span>${s.prompt_tokens || 0} prompt + ${s.completion_tokens || 0} completion = <strong>${(s.prompt_tokens || 0) + (s.completion_tokens || 0)}</strong> total</span>
+    </div>
+
+    <h3>💬 Prompt</h3>
+    <div class="output" style="min-height:60px;max-height:150px;">${(s.prompt || '').replace(/</g, '&lt;')}</div>
+  `;
+
+  if (s.response) {
+    html += `
+      <h3>🤖 Response</h3>
+      <div class="output" style="min-height:60px;max-height:200px;">${(s.response || '').replace(/</g, '&lt;')}</div>
+    `;
+  }
+
+  if (s.error) {
+    html += `
+      <h3>❌ Error</h3>
+      <div class="output" style="border-left:3px solid #FF5252;">${(s.error || '').replace(/</g, '&lt;')}</div>
+    `;
+  }
+
+  if (events.length > 0) {
+    html += `<h3>📊 Events 时间线 (${events.length} 个)</h3><div class="timeline">`;
+    let prevTime = null;
+    events.forEach((evt, idx) => {
+      const t = new Date(evt.created_at);
+      const delta = prevTime ? (t - prevTime) : 0;
+      prevTime = t;
+      const isChunk = evt.event_type === 'chunk';
+      const isState = evt.event_type === 'state_transition';
+      const isError = evt.event_type === 'error';
+      const cssClass = isChunk ? 'chunk' : isState ? 'state' : isError ? 'error' : '';
+      const payload = evt.payload ? evt.payload.replace(/</g, '&lt;').slice(0, 200) : '';
+      html += `
+        <div class="timeline-event ${cssClass}">
+          <span class="time">${evt.created_at.slice(11, 23)}</span>
+          <span class="type">[${idx + 1}/${events.length}] ${evt.event_type}</span>
+          ${delta > 0 ? `<span class="delta">+${delta}ms</span>` : ''}
+          ${payload ? `<div style="font-size:11px;color:#666;margin-top:4px;font-family:monospace;">${payload}${payload.length >= 200 ? '...' : ''}</div>` : ''}
+        </div>
+      `;
+    });
+    html += '</div>';
+  } else {
+    html += `<h3>📊 Events 时间线</h3><div class="empty">暂无 events</div>`;
+  }
+
+  detail.innerHTML = html;
+}
 
 async function sendRequest(stream) {
   chunkCount = 0;
@@ -106,7 +424,7 @@ async function sendRequest(stream) {
       { role: 'user', content: document.getElementById('user').value }
     ],
     stream,
-    metadata: { project: 'playground-d2', phase: 'test' }
+    metadata: { project: 'playground-d3', phase: 'test' }
   };
 
   try {
