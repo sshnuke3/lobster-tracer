@@ -67,12 +67,35 @@ export async function handleProxy(req, res) {
       chunkCount++;
       res.write(chunkStr);
 
-      // 每 10 个 chunk 入库一次(避免 DB 阻塞)
-      if (chunkCount % 10 === 0) {
+      // D3.6: 每个 SSE chunk 真入库(拆 SSE 行,解析 data: {...} 拿 delta)
+      // 优先解析流式 JSON,抓 delta.content 或 delta.reasoning_content
+      try {
+        const lines = chunkStr.split('\n').filter(l => l.startsWith('data:') && !l.includes('[DONE]'));
+        for (const line of lines) {
+          const dataStr = line.slice(5).trim();
+          if (!dataStr) continue;
+          const obj = JSON.parse(dataStr);
+          const delta = obj.choices?.[0]?.delta || {};
+          insertEvent({
+            sessionId,
+            eventType: 'chunk',
+            payload: {
+              idx: chunkCount,
+              content_delta: delta.content || null,
+              reasoning_delta: delta.reasoning_content || null,
+              finish_reason: obj.choices?.[0]?.finish_reason || null,
+              usage: obj.usage || null,
+              model: obj.model || null,
+              ts: Date.now()
+            }
+          });
+        }
+      } catch (e) {
+        // 解析失败(可能 SSE 跨 chunk 拼接)→ 用 chunk_batch 替代
         insertEvent({
           sessionId,
           eventType: 'chunk_batch',
-          payload: { chunks_so_far: chunkCount, last_chunk_size: chunk.length }
+          payload: { chunks_so_far: chunkCount, last_chunk_size: chunk.length, parse_error: e.message }
         });
       }
     });
