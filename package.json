@@ -1,0 +1,26 @@
+{
+  "name": "lobster-tracer",
+  "version": "0.1.0",
+  "description": "AI 长文工作流可视化调试器 - 像浏览器 DevTools 看网络请求一样,看 AI 的 prompt / token 流 / 状态机迁移",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "echo \"no tests yet\" && exit 0"
+  },
+  "keywords": ["ai", "tracing", "llm", "debug", "visualization"],
+  "author": "Lobster Assistant",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.0",
+    "better-sqlite3": "^11.5.0",
+    "ws": "^8.18.0",
+    "cors": "^2.8.5",
+    "undici": "^6.20.0",
+    "uuid": "^11.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

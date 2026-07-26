@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🦞 Lobster-Tracer · AI 长文工作流可视化调试器</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #FFF8F2 0%, #C8E6E2 100%);
+      min-height: 100vh;
+      padding: 24px;
+      color: #2A2A2A;
+    }
+    .header { text-align: center; margin-bottom: 32px; }
+    .header h1 {
+      font-size: 32px; font-weight: 700;
+      background: linear-gradient(90deg, #FF8B94, #FFD9C0);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .header .subtitle { font-size: 14px; color: #666; margin-top: 8px; }
+    .badge {
+      display: inline-block; padding: 4px 12px; border-radius: 12px;
+      background: #FFD9C0; font-size: 12px; font-weight: 600;
+      margin-top: 8px;
+    }
+    .phase-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px; }
+    .phase-card {
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: 12px; padding: 16px;
+      border: 1px solid rgba(0, 0, 0, 0.05);
+      backdrop-filter: blur(10px);
+    }
+    .phase-card .label { font-size: 11px; color: #888; letter-spacing: 2px; }
+    .phase-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; color: #FF8B94; }
+    .phase-card .desc { font-size: 12px; color: #666; margin-top: 4px; }
+    .endpoints {
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 12px; padding: 24px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+    }
+    .endpoints h2 { font-size: 18px; margin-bottom: 16px; color: #2A2A2A; }
+    .endpoint {
+      padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.06);
+      font-family: 'Menlo', 'Monaco', monospace; font-size: 13px;
+    }
+    .endpoint:last-child { border-bottom: none; }
+    .method {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-weight: 700; font-size: 11px; margin-right: 8px;
+    }
+    .method.get { background: #C8E6E2; color: #2A4A48; }
+    .method.post { background: #FFD9C0; color: #8B4513; }
+    .method.proxy { background: #FF8B94; color: white; }
+    .path { color: #2A2A2A; font-weight: 600; }
+    .desc-inline { color: #666; font-size: 11px; margin-left: 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🦞 Lobster-Tracer</h1>
+    <div class="subtitle">AI 长文工作流可视化调试器 · 像浏览器 DevTools 看网络请求一样,看 AI 的 prompt / token 流 / 状态机迁移</div>
+    <span class="badge">D1 骨架版 · 2026-07-26</span>
+  </div>
+
+  <div class="phase-grid">
+    <div class="phase-card">
+      <div class="label">D1 (今天)</div>
+      <div class="value">✓</div>
+      <div class="desc">项目骨架 + SQLite 建表 + Express 起服务</div>
+    </div>
+    <div class="phase-card">
+      <div class="label">D2 (明天)</div>
+      <div class="value">⏳</div>
+      <div class="desc">F1 OpenAI 兼容 Stream Proxy</div>
+    </div>
+    <div class="phase-card">
+      <div class="label">D3</div>
+      <div class="value">⏳</div>
+      <div class="desc">F2 会话存储 + 章节时间线</div>
+    </div>
+  </div>
+
+  <div class="endpoints">
+    <h2>可用 API 端点</h2>
+    <div class="endpoint">
+      <span class="method get">GET</span>
+      <span class="path">/health</span>
+      <span class="desc-inline">健康检查 + DB 统计</span>
+    </div>
+    <div class="endpoint">
+      <span class="method get">GET</span>
+      <span class="path">/sessions</span>
+      <span class="desc-inline">列出所有会话(D2/D4 完善)</span>
+    </div>
+    <div class="endpoint">
+      <span class="method get">GET</span>
+      <span class="path">/sessions/:id</span>
+      <span class="desc-inline">单会话详情 + events 流</span>
+    </div>
+    <div class="endpoint">
+      <span class="method proxy">D2</span>
+      <span class="path">/proxy/v1/chat/completions</span>
+      <span class="desc-inline">OpenAI 兼容 Stream Proxy(明天实现)</span>
+    </div>
+  </div>
+</body>
+</html>
