@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>🦞 Lobster-Tracer · Stream Proxy Playground (D2)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #FFF8F2 0%, #C8E6E2 100%);
+      min-height: 100vh; padding: 24px; color: #2A2A2A;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 28px; margin-bottom: 8px; background: linear-gradient(90deg, #FF8B94, #FFD9C0);
+         -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .subtitle { color: #666; margin-bottom: 24px; font-size: 13px; }
+    .panel { background: rgba(255,255,255,0.85); border-radius: 12px; padding: 20px;
+             margin-bottom: 16px; backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.05); }
+    .panel h2 { font-size: 16px; margin-bottom: 12px; color: #2A2A2A; }
+    label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; letter-spacing: 1px; text-transform: uppercase; }
+    select, textarea, input { width: 100%; padding: 8px 10px; border: 1px solid #E0E0E0; border-radius: 6px;
+                              font-family: inherit; font-size: 14px; margin-bottom: 12px; }
+    textarea { min-height: 80px; resize: vertical; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px;
+             font-weight: 600; cursor: pointer; margin-right: 8px; }
+    .btn-primary { background: #FF8B94; color: white; }
+    .btn-secondary { background: #C8E6E2; color: #2A4A48; }
+    .btn-primary:hover { background: #FF6878; }
+    .output { background: #1A1A1A; color: #E0E0E0; padding: 16px; border-radius: 6px;
+              font-family: 'Menlo', 'Monaco', monospace; font-size: 13px;
+              min-height: 120px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; }
+    .meta { font-size: 11px; color: #888; margin-top: 8px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 11px;
+             font-weight: 600; margin-right: 6px; }
+    .badge.ok { background: #C8E6E2; color: #2A4A48; }
+    .badge.err { background: #FFD9C0; color: #8B4513; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🦞 Lobster-Tracer Playground</h1>
+    <div class="subtitle">D2 测试页 · 通过 /proxy/v1/chat/completions 调 OpenAI · 自动落 SQLite · 显示流式响应</div>
+
+    <div class="panel">
+      <h2>📝 请求参数</h2>
+      <label>模型</label>
+      <select id="model">
+        <option value="gpt-4o-mini">gpt-4o-mini</option>
+        <option value="gpt-4o">gpt-4o</option>
+        <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+      </select>
+
+      <label>系统提示</label>
+      <textarea id="system">你是一个简单的助手,用一句话回答用户问题。</textarea>
+
+      <label>用户消息</label>
+      <textarea id="user">用一句话解释什么是 Lobster-Tracer?</textarea>
+
+      <button class="btn-primary" onclick="sendRequest(true)">🚀 流式调用</button>
+      <button class="btn-secondary" onclick="sendRequest(false)">📦 非流式调用</button>
+    </div>
+
+    <div class="panel">
+      <h2>📡 响应输出</h2>
+      <div id="output" class="output">(等待发送...)</div>
+      <div class="meta">
+        <span class="badge ok" id="metaSession">Session: -</span>
+        <span class="badge ok" id="metaChunks">Chunks: 0</span>
+        <span class="badge ok" id="metaDuration">Duration: -</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>🔍 怎么验证落库</h2>
+      <p style="font-size: 13px; line-height: 1.6; color: #555;">
+        调用完成后,在另一终端跑:<br>
+        <code>curl https://lobster-tracer-production.up.railway.app/sessions</code><br>
+        应该看到刚生成的会话(含 model / status / duration / token 信息)。<br>
+        详细 events 流:<br>
+        <code>curl https://lobster-tracer-production.up.railway.app/sessions/&lt;session-id&gt;</code>
+      </p>
+    </div>
+  </div>
+
+<script>
+let chunkCount = 0;
+
+async function sendRequest(stream) {
+  chunkCount = 0;
+  const output = document.getElementById('output');
+  output.textContent = '⏳ 发送请求...\n';
+  document.getElementById('metaSession').textContent = 'Session: ...';
+  document.getElementById('metaChunks').textContent = 'Chunks: 0';
+  document.getElementById('metaDuration').textContent = 'Duration: ...';
+
+  const startTime = Date.now();
+  const body = {
+    model: document.getElementById('model').value,
+    messages: [
+      { role: 'system', content: document.getElementById('system').value },
+      { role: 'user', content: document.getElementById('user').value }
+    ],
+    stream,
+    metadata: { project: 'playground-d2', phase: 'test' }
+  };
+
+  try {
+    const resp = await fetch('/proxy/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const sessionId = resp.headers.get('X-Session-Id');
+    document.getElementById('metaSession').textContent = `Session: ${sessionId?.slice(0, 8)}...`;
+
+    if (stream) {
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      output.textContent = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        output.textContent += chunk;
+        chunkCount++;
+      }
+    } else {
+      const data = await resp.json();
+      output.textContent = JSON.stringify(data, null, 2);
+    }
+
+    const duration = Date.now() - startTime;
+    document.getElementById('metaChunks').textContent = `Chunks: ${chunkCount}`;
+    document.getElementById('metaDuration').textContent = `Duration: ${duration}ms`;
+  } catch (err) {
+    output.textContent = `❌ Error: ${err.message}\n\n主人记得:在 Railway Variables 加 OPENAI_API_KEY`;
+  }
+}
+</script>
+</body>
+</html>
