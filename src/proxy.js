@@ -1,5 +1,7 @@
-// Lobster-Tracer D2 模块:proxy.js - OpenAI 兼容 Stream Proxy
+// Lobster-Tracer D4 模块:proxy.js - OpenAI 兼容 Stream Proxy
 // 接收 /proxy/v1/chat/completions → 转发 OpenAI → 抓 chunk 落 DB → 流式返回
+// D4 修复:① SSE 跨 TCP 包缓冲(不再丢被切开的 delta) ② 用 usage 字段真算 token
+//        ③ 入库去截断(完整存 prompt/response) ④ 日志写失败绝不中断流式转发
 
 import { request } from 'undici';
 import { insertSession, insertEvent, completeSession, failSession } from './db.js';
@@ -8,30 +10,35 @@ import { insertSession, insertEvent, completeSession, failSession } from './db.j
 const OPENAI_API_BASE = process.env.OPENAI_API_BASE || 'https://api.openai.com/v1';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 
+// 安全写日志:任何 DB 异常都不应中断对流式响应的转发(日志是副产物,响应才是主链路)
+function logEvent(sessionId, eventType, payload) {
+  try { insertEvent({ sessionId, eventType, payload }); } catch (_) { /* swallow */ }
+}
+
 export async function handleProxy(req, res) {
   const requestBody = req.body;
   const model = requestBody?.model || 'unknown';
   const isStream = !!requestBody?.stream;
 
-  // 1. 启动 session
+  // 1. 启动 session(完整存 prompt,不再 slice(0,500) 截断)
   const { id: sessionId } = insertSession({
     project: requestBody.metadata?.project || 'lobster-tracer',
     phase: requestBody.metadata?.phase || null,
-    prompt: JSON.stringify(requestBody.messages || []).slice(0, 500),
+    prompt: JSON.stringify(requestBody.messages || []),
     model,
-    metadata: { isStream, proxy: 'lobster-tracer-d2' }
+    metadata: { isStream, proxy: 'lobster-tracer-d4' }
   });
 
   const startTime = Date.now();
 
   // 2. 失败兜底
   if (!OPENAI_API_KEY) {
-    insertEvent({ sessionId, eventType: 'error', payload: { reason: 'OPENAI_API_KEY missing' } });
+    logEvent(sessionId, 'error', { reason: 'OPENAI_API_KEY missing' });
     failSession({ sessionId, error: 'OPENAI_API_KEY missing' });
     return res.status(500).json({ error: 'OPENAI_API_KEY not configured in Railway env vars' });
   }
 
-  insertEvent({ sessionId, eventType: 'proxy_forward', payload: { model, isStream, base: OPENAI_API_BASE } });
+  logEvent(sessionId, 'proxy_forward', { model, isStream, base: OPENAI_API_BASE });
 
   // 3. 转发到 OpenAI
   let upstreamResponse;
@@ -46,7 +53,7 @@ export async function handleProxy(req, res) {
       body: JSON.stringify(requestBody)
     });
   } catch (err) {
-    insertEvent({ sessionId, eventType: 'error', payload: { phase: 'upstream_request', error: err.message } });
+    logEvent(sessionId, 'error', { phase: 'upstream_request', error: err.message });
     failSession({ sessionId, error: err.message });
     return res.status(502).json({ error: err.message });
   }
@@ -60,6 +67,31 @@ export async function handleProxy(req, res) {
 
     let fullResponse = '';
     let chunkCount = 0;
+    let sseBuffer = '';        // 跨 chunk 缓冲,解决 TCP 分包导致的 JSON 行被截断
+    let capturedUsage = null;  // 流式 usage 通常在末包,抓到即存
+
+    const handleLine = (dataStr) => {
+      if (!dataStr || dataStr === '[DONE]') return;
+      try {
+        const obj = JSON.parse(dataStr);
+        const delta = obj.choices?.[0]?.delta || {};
+        if (obj.usage) capturedUsage = obj.usage;
+        logEvent(sessionId, 'chunk', {
+          idx: chunkCount,
+          content_delta: delta.content || null,
+          reasoning_delta: delta.reasoning_content || null,
+          finish_reason: obj.choices?.[0]?.finish_reason || null,
+          usage: obj.usage || null,
+          model: obj.model || null,
+          ts: Date.now()
+        });
+      } catch (e) {
+        // 仍解析不出(非标 SSE)→ 记 chunk_batch;但原始 delta 已在 fullResponse,不丢
+        logEvent(sessionId, 'chunk_batch', {
+          chunks_so_far: chunkCount, parse_error: e.message
+        });
+      }
+    };
 
     upstreamResponse.body.on('data', (chunk) => {
       const chunkStr = chunk.toString();
@@ -67,54 +99,40 @@ export async function handleProxy(req, res) {
       chunkCount++;
       res.write(chunkStr);
 
-      // D3.6: 每个 SSE chunk 真入库(拆 SSE 行,解析 data: {...} 拿 delta)
-      // 优先解析流式 JSON,抓 delta.content 或 delta.reasoning_content
-      try {
-        const lines = chunkStr.split('\n').filter(l => l.startsWith('data:') && !l.includes('[DONE]'));
-        for (const line of lines) {
-          const dataStr = line.slice(5).trim();
-          if (!dataStr) continue;
-          const obj = JSON.parse(dataStr);
-          const delta = obj.choices?.[0]?.delta || {};
-          insertEvent({
-            sessionId,
-            eventType: 'chunk',
-            payload: {
-              idx: chunkCount,
-              content_delta: delta.content || null,
-              reasoning_delta: delta.reasoning_content || null,
-              finish_reason: obj.choices?.[0]?.finish_reason || null,
-              usage: obj.usage || null,
-              model: obj.model || null,
-              ts: Date.now()
-            }
-          });
-        }
-      } catch (e) {
-        // 解析失败(可能 SSE 跨 chunk 拼接)→ 用 chunk_batch 替代
-        insertEvent({
-          sessionId,
-          eventType: 'chunk_batch',
-          payload: { chunks_so_far: chunkCount, last_chunk_size: chunk.length, parse_error: e.message }
-        });
+      // D4: 按行缓冲,只处理完整的 `data:` 行;残余半行留到下次或流结束再冲刷
+      sseBuffer += chunkStr;
+      let nl;
+      while ((nl = sseBuffer.indexOf('\n')) !== -1) {
+        const rawLine = sseBuffer.slice(0, nl);
+        sseBuffer = sseBuffer.slice(nl + 1);
+        const line = rawLine.trim();
+        if (!line.startsWith('data:')) continue;
+        handleLine(line.slice(5).trim());
       }
     });
 
     upstreamResponse.body.on('end', () => {
+      // 冲刷缓冲区里最后一行(可能被 EOF 截断在行尾)
+      const tail = sseBuffer.trim();
+      if (tail.startsWith('data:')) handleLine(tail.slice(5).trim());
+
       const durationMs = Date.now() - startTime;
-      insertEvent({ sessionId, eventType: 'proxy_done', payload: { total_chunks: chunkCount, duration_ms: durationMs } });
+      logEvent(sessionId, 'proxy_done', {
+        total_chunks: chunkCount, duration_ms: durationMs, usage: capturedUsage
+      });
+      // D4: token 统计用真实 usage;流式若无 usage 则 completion_tokens 记 0(不再用 chunk 数冒充)
       completeSession({
         sessionId,
-        response: fullResponse.slice(0, 1000),
-        promptTokens: 0,
-        completionTokens: chunkCount,
+        response: fullResponse,           // 完整存,不再 slice(0,1000)
+        promptTokens: capturedUsage?.prompt_tokens || 0,
+        completionTokens: capturedUsage?.completion_tokens || 0,
         durationMs
       });
       res.end();
     });
 
     upstreamResponse.body.on('error', (err) => {
-      insertEvent({ sessionId, eventType: 'error', payload: { phase: 'streaming', error: err.message } });
+      logEvent(sessionId, 'error', { phase: 'streaming', error: err.message });
       failSession({ sessionId, error: err.message });
       res.end();
     });
@@ -126,15 +144,11 @@ export async function handleProxy(req, res) {
     try { parsed = JSON.parse(responseBody); } catch (e) { parsed = { raw: responseBody }; }
     const durationMs = Date.now() - startTime;
 
-    insertEvent({
-      sessionId,
-      eventType: 'proxy_done',
-      payload: { duration_ms: durationMs, response_size: responseBody.length }
-    });
+    logEvent(sessionId, 'proxy_done', { duration_ms: durationMs, response_size: responseBody.length, usage: parsed.usage || null });
 
     completeSession({
       sessionId,
-      response: responseBody.slice(0, 1000),
+      response: responseBody,            // 完整存,不再 slice(0,1000)
       promptTokens: parsed.usage?.prompt_tokens || 0,
       completionTokens: parsed.usage?.completion_tokens || 0,
       durationMs

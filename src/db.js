@@ -3,11 +3,14 @@
 
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 
 let db;
 
 export function initDB(dbPath) {
+  // better-sqlite3 不会自动建父目录,首跑必须先确保 data/ 存在
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
 
@@ -37,6 +40,9 @@ export function initDB(dbPath) {
       created_at TEXT NOT NULL,
       FOREIGN KEY (session_id) REFERENCES sessions(id)
     );
+
+    -- FK 不自动建索引,events 按 session_id 查询频繁,显式建索引避免全表扫
+    CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
   `);
 
   return db;

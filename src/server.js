@@ -25,8 +25,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.2.0',
-    phase: 'D2-stream-proxy',
+    version: '0.3.0',
+    phase: 'D4-statemachine-viz',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
   });
@@ -44,6 +44,31 @@ app.get('/sessions/:id', (req, res) => {
   const result = getSession(req.params.id);
   if (!result) return res.status(404).json({ error: 'session not found' });
   res.json(result);
+});
+
+// D5/D6: 状态机定义 + 阶段迁移(参考主人 xiaoshuo-cli 真实长文工作流)
+// 既含正常推进,也含 self-loop(大纲被打回/续写循环)与 error 恢复 —— 对应 README 的异常检测卖点
+const PHASE_MACHINE = {
+  phases: ['init', 'outline', 'outline_confirm', 'chapter_plan', 'chapter_gen', 'continue', 'verify', 'done', 'error'],
+  transitions: [
+    { from: 'init', to: 'outline', value: 12 },
+    { from: 'outline', to: 'outline_confirm', value: 12 },
+    { from: 'outline_confirm', to: 'chapter_plan', value: 10 },
+    { from: 'outline_confirm', to: 'outline', value: 2 },   // 大纲被打回 → 自环
+    { from: 'chapter_plan', to: 'chapter_gen', value: 10 },
+    { from: 'chapter_gen', to: 'continue', value: 9 },
+    { from: 'chapter_gen', to: 'error', value: 1 },          // 生成异常
+    { from: 'continue', to: 'verify', value: 8 },
+    { from: 'continue', to: 'chapter_gen', value: 1 },       // 续写循环
+    { from: 'verify', to: 'done', value: 7 },
+    { from: 'verify', to: 'continue', value: 1 },
+    { from: 'error', to: 'chapter_gen', value: 1 }           // 异常恢复
+  ]
+};
+
+// D5/D6: 状态机定义接口(Sankey 可视化数据源)
+app.get('/analytics/statemachine', (req, res) => {
+  res.json(PHASE_MACHINE);
 });
 
 // D3.5: DELETE /sessions/:id 级联删 session + events

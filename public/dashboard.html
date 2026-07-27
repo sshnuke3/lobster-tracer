@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🦞 Lobster-Tracer · 可视化调试面板 (D5/D6)</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #FFF8F2 0%, #C8E6E2 100%);
+      min-height: 100vh; padding: 20px; color: #2A2A2A;
+    }
+    a { color: #FF6878; text-decoration: none; }
+    .header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+    .header h1 { font-size: 24px; background: linear-gradient(90deg, #FF8B94, #FFD9C0);
+                 -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .header .nav a { margin-left: 14px; font-size: 13px; font-weight: 600; }
+    .top { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .panel { background: rgba(255,255,255,0.85); border-radius: 12px; padding: 16px;
+             border: 1px solid rgba(0,0,0,0.05); backdrop-filter: blur(10px); }
+    .panel h2 { font-size: 15px; margin-bottom: 10px; color: #2A2A2A; }
+    .chart { width: 100%; height: 320px; }
+    .mid { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
+    .sess-list { max-height: 520px; overflow-y: auto; }
+    .sess { padding: 10px 12px; border-radius: 8px; margin-bottom: 8px; cursor: pointer;
+            background: rgba(255,255,255,0.6); border: 1px solid transparent; transition: .15s; }
+    .sess:hover { border-color: #FF8B94; }
+    .sess.active { border-color: #FF8B94; background: #FFE9EC; }
+    .sess .row1 { display: flex; justify-content: space-between; font-size: 12px; }
+    .sess .model { font-weight: 700; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+    .st-completed { background: #4CAF93; } .st-running { background: #FFB74D; } .st-failed { background: #E57373; }
+    .sess .meta { font-size: 11px; color: #888; margin-top: 4px; }
+    .detail .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+    .mg { background: rgba(255,255,255,0.6); border-radius: 8px; padding: 8px 10px; }
+    .mg .k { font-size: 10px; color: #999; letter-spacing: 1px; }
+    .mg .v { font-size: 15px; font-weight: 700; color: #FF8B94; margin-top: 2px; }
+    .log { max-height: 320px; overflow-y: auto; font-family: 'Menlo','Monaco',monospace; font-size: 12px;
+           background: #1A1A1A; color: #E0E0E0; border-radius: 8px; padding: 12px; white-space: pre-wrap; line-height: 1.5; }
+    .log .reason { color: #FFD9C0; }
+    .log .content { color: #C8E6E2; }
+    .empty { color: #999; font-size: 13px; padding: 20px; text-align: center; }
+    .toolbar { margin-bottom: 10px; }
+    button { padding: 6px 14px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600;
+             cursor: pointer; background: #FF8B94; color: #fff; }
+    button:hover { background: #FF6878; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🦞 Lobster-Tracer · 可视化调试面板</h1>
+    <div class="nav">
+      <a href="/">首页</a>
+      <a href="/playground.html">Playground</a>
+      <a href="https://lobster-tracer-production.up.railway.app" target="_blank">公网</a>
+    </div>
+  </div>
+
+  <div class="top">
+    <div class="panel">
+      <h2>状态机迁移 (Phase State Machine · xiaoshuo-cli 真实工作流)</h2>
+      <div id="sankey" class="chart"></div>
+    </div>
+    <div class="panel">
+      <h2>会话状态分布</h2>
+      <div id="statusPie" class="chart"></div>
+    </div>
+  </div>
+
+  <div class="mid">
+    <div class="panel sess-list" id="sessList">
+      <div class="toolbar"><button onclick="loadSessions()">↻ 刷新会话</button></div>
+      <div class="empty">加载中…</div>
+    </div>
+    <div class="panel detail" id="detail">
+      <div class="empty">← 从左侧选择一个会话查看 token 流 / chunk 时间线</div>
+    </div>
+  </div>
+
+<script>
+const sankey = echarts.init(document.getElementById('sankey'));
+const statusPie = echarts.init(document.getElementById('statusPie'));
+window.addEventListener('resize', () => { sankey.resize(); statusPie.resize(); });
+
+async function loadStateMachine() {
+  try {
+    const m = await (await fetch('/analytics/statemachine')).json();
+    const data = m.transitions.map(t => ({ source: t.from, target: t.to, value: t.value }));
+    sankey.setOption({
+      tooltip: { trigger: 'item', formatter: p => p.dataType === 'edge'
+        ? `${p.data.source} → ${p.data.target}<br/>次数: ${p.data.value}` : p.name },
+      series: [{
+        type: 'sankey', emphasis: { focus: 'adjacency' },
+        nodeAlign: 'left',
+        data: m.phases.map(p => ({ name: p, itemStyle: { color: p === 'error' ? '#E57373' : p === 'done' ? '#4CAF93' : '#FF8B94' } })),
+        links: data,
+        label: { color: '#2A2A2A', fontSize: 11 },
+        lineStyle: { color: 'gradient', opacity: 0.45, curveness: 0.5 }
+      }]
+    });
+  } catch (e) { console.error(e); }
+}
+
+async function loadStatus() {
+  try {
+    const h = await (await fetch('/health')).json();
+    const s = h.db_stats || {};
+    statusPie.setOption({
+      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+      series: [{
+        type: 'pie', radius: ['45%', '70%'],
+        label: { fontSize: 12 },
+        data: [
+          { name: 'completed', value: s.completed || 0, itemStyle: { color: '#4CAF93' } },
+          { name: 'running', value: s.running || 0, itemStyle: { color: '#FFB74D' } },
+          { name: 'failed', value: s.failed || 0, itemStyle: { color: '#E57373' } }
+        ]
+      }]
+    });
+  } catch (e) { console.error(e); }
+}
+
+async function loadSessions() {
+  const box = document.getElementById('sessList');
+  try {
+    const { sessions } = await (await fetch('/sessions?limit=100')).json();
+    if (!sessions.length) { box.innerHTML = '<div class="empty">暂无会话,去 Playground 跑一次</div>'; return; }
+    box.innerHTML = '<div class="toolbar"><button onclick="loadSessions()">↻ 刷新会话</button></div>' +
+      sessions.map(s => `
+        <div class="sess" onclick="openSession('${s.id}')">
+          <div class="row1">
+            <span class="model">${s.model || 'unknown'}</span>
+            <span><span class="dot st-${s.status}"></span>${s.status}</span>
+          </div>
+          <div class="meta">${(s.phase || '—')} · ${(s.id || '').slice(0,8)} · ${s.started_at?.slice(0,19)?.replace('T',' ') || ''}</div>
+        </div>`).join('');
+  } catch (e) { box.innerHTML = '<div class="empty">加载失败</div>'; }
+}
+
+async function openSession(id) {
+  document.querySelectorAll('.sess').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  const detail = document.getElementById('detail');
+  detail.innerHTML = '<div class="empty">加载中…</div>';
+  try {
+    const { session, events } = await (await fetch('/sessions/' + id)).json();
+    const chunks = events.filter(e => e.event_type === 'chunk' && e.payload);
+    // 累计 content / reasoning 字符流(代理 token 流)
+    let cC = 0, cR = 0; const xs = [], yC = [], yR = [];
+    chunks.forEach(e => {
+      cC += (e.payload.content_delta || '').length;
+      cR += (e.payload.reasoning_delta || '').length;
+      xs.push(e.payload.idx); yC.push(cC); yR.push(cR);
+    });
+
+    detail.innerHTML = `
+      <div class="meta-grid">
+        <div class="mg"><div class="k">MODEL</div><div class="v">${session.model || '—'}</div></div>
+        <div class="mg"><div class="k">PHASE</div><div class="v">${session.phase || '—'}</div></div>
+        <div class="mg"><div class="k">COMPLETION TOK</div><div class="v">${session.completion_tokens || 0}</div></div>
+        <div class="mg"><div class="k">DURATION</div><div class="v">${((session.duration_ms||0)/1000).toFixed(1)}s</div></div>
+      </div>
+      <h2>字符流时间线 (content vs reasoning)</h2>
+      <div id="flow" class="chart" style="height:240px"></div>
+      <h2 style="margin-top:12px">Chunk 事件日志 (${chunks.length})</h2>
+      <div class="log">${renderLog(chunks)}</div>`;
+
+    const flow = echarts.init(document.getElementById('flow'));
+    flow.setOption({
+      tooltip: { trigger: 'axis' }, legend: { data: ['content', 'reasoning'], top: 0 },
+      grid: { left: 40, right: 16, top: 30, bottom: 24 },
+      xAxis: { type: 'category', data: xs, name: 'chunk' },
+      yAxis: { type: 'value', name: '累计字符' },
+      series: [
+        { name: 'content', type: 'line', showSymbol: false, data: yC, lineStyle: { color: '#4CAF93' }, itemStyle: { color: '#4CAF93' } },
+        { name: 'reasoning', type: 'line', showSymbol: false, data: yR, lineStyle: { color: '#FFB74D' }, itemStyle: { color: '#FFB74D' } }
+      ]
+    });
+  } catch (e) { detail.innerHTML = '<div class="empty">加载失败: ' + e.message + '</div>'; }
+}
+
+function renderLog(chunks) {
+  return chunks.slice(-200).map(e => {
+    const p = e.payload || {};
+    const c = p.content_delta ? `<span class="content">${escapeHtml(p.content_delta)}</span>` : '';
+    const r = p.reasoning_delta ? `<span class="reason">[R] ${escapeHtml(p.reasoning_delta)}</span>` : '';
+    return `#${p.idx} ${c}${r}`;
+  }).join('\n') || '(无 chunk 事件)';
+}
+function escapeHtml(s) { return (s||'').replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
+
+loadStateMachine(); loadStatus(); loadSessions();
+</script>
+</body>
+</html>

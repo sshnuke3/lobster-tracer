@@ -13,7 +13,9 @@
     .container { max-width: 960px; margin: 0 auto; }
     h1 { font-size: 28px; margin-bottom: 8px; background: linear-gradient(90deg, #FF8B94, #FFD9C0);
          -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .subtitle { color: #666; margin-bottom: 24px; font-size: 13px; }
+    .subtitle { color: #666; margin-bottom: 12px; font-size: 13px; }
+    .nav { margin-bottom: 20px; }
+    .nav a { margin-right: 14px; font-size: 13px; font-weight: 600; color: #FF6878; text-decoration: none; }
     .panel { background: rgba(255,255,255,0.85); border-radius: 12px; padding: 20px;
              margin-bottom: 16px; backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.05); }
     .panel h2 { font-size: 16px; margin-bottom: 12px; color: #2A2A2A; }
@@ -87,6 +89,7 @@
   <div class="container">
     <h1>🦞 Lobster-Tracer Playground</h1>
     <div class="subtitle">D2 测试页 + D3 会话历史 · 通过 /proxy/v1/chat/completions 调 OpenAI · 自动落 SQLite · 显示流式响应</div>
+    <div class="nav"><a href="/">🏠 首页</a><a href="/dashboard.html">📊 可视化面板</a><a href="https://lobster-tracer-production.up.railway.app" target="_blank">🌐 公网</a></div>
 
     <div class="tabs">
       <div class="tab active" data-tab="play" onclick="switchTab('play')">🚀 实时调用</div>

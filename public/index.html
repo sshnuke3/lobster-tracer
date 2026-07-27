@@ -9,48 +9,37 @@
     body {
       font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
       background: linear-gradient(135deg, #FFF8F2 0%, #C8E6E2 100%);
-      min-height: 100vh;
-      padding: 24px;
-      color: #2A2A2A;
+      min-height: 100vh; padding: 24px; color: #2A2A2A;
     }
-    .header { text-align: center; margin-bottom: 32px; }
+    .header { text-align: center; margin-bottom: 28px; }
     .header h1 {
       font-size: 32px; font-weight: 700;
       background: linear-gradient(90deg, #FF8B94, #FFD9C0);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
     .header .subtitle { font-size: 14px; color: #666; margin-top: 8px; }
+    .nav { margin-top: 12px; }
+    .nav a { margin: 0 10px; font-size: 13px; font-weight: 600; color: #FF6878; text-decoration: none; }
     .badge {
       display: inline-block; padding: 4px 12px; border-radius: 12px;
-      background: #FFD9C0; font-size: 12px; font-weight: 600;
-      margin-top: 8px;
+      background: #FFD9C0; font-size: 12px; font-weight: 600; margin-top: 10px;
     }
     .phase-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px; }
     .phase-card {
-      background: rgba(255, 255, 255, 0.6);
-      border-radius: 12px; padding: 16px;
-      border: 1px solid rgba(0, 0, 0, 0.05);
-      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.6); border-radius: 12px; padding: 16px;
+      border: 1px solid rgba(0, 0, 0, 0.05); backdrop-filter: blur(10px);
     }
     .phase-card .label { font-size: 11px; color: #888; letter-spacing: 2px; }
-    .phase-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; color: #FF8B94; }
+    .phase-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; color: #4CAF93; }
     .phase-card .desc { font-size: 12px; color: #666; margin-top: 4px; }
     .endpoints {
-      background: rgba(255, 255, 255, 0.8);
-      border-radius: 12px; padding: 24px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+      background: rgba(255, 255, 255, 0.8); border-radius: 12px; padding: 24px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06); max-width: 720px; margin: 0 auto;
     }
     .endpoints h2 { font-size: 18px; margin-bottom: 16px; color: #2A2A2A; }
-    .endpoint {
-      padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.06);
-      font-family: 'Menlo', 'Monaco', monospace; font-size: 13px;
-    }
+    .endpoint { padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.06); font-family: 'Menlo','Monaco',monospace; font-size: 13px; }
     .endpoint:last-child { border-bottom: none; }
-    .method {
-      display: inline-block; padding: 2px 8px; border-radius: 4px;
-      font-weight: 700; font-size: 11px; margin-right: 8px;
-    }
+    .method { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 11px; margin-right: 8px; }
     .method.get { background: #C8E6E2; color: #2A4A48; }
     .method.post { background: #FFD9C0; color: #8B4513; }
     .method.proxy { background: #FF8B94; color: white; }
@@ -62,49 +51,31 @@
   <div class="header">
     <h1>🦞 Lobster-Tracer</h1>
     <div class="subtitle">AI 长文工作流可视化调试器 · 像浏览器 DevTools 看网络请求一样,看 AI 的 prompt / token 流 / 状态机迁移</div>
-    <span class="badge">D1 骨架版 · 2026-07-26</span>
+    <div class="nav">
+      <a href="/playground.html">▶ Playground</a>
+      <a href="/dashboard.html">📊 可视化面板</a>
+      <a href="https://lobster-tracer-production.up.railway.app" target="_blank">🌐 公网</a>
+    </div>
+    <span class="badge">v0.3.0 · D1-D6 已完成 · 2026-07-27</span>
   </div>
 
   <div class="phase-grid">
-    <div class="phase-card">
-      <div class="label">D1 (今天)</div>
-      <div class="value">✓</div>
-      <div class="desc">项目骨架 + SQLite 建表 + Express 起服务</div>
-    </div>
-    <div class="phase-card">
-      <div class="label">D2 (明天)</div>
-      <div class="value">⏳</div>
-      <div class="desc">F1 OpenAI 兼容 Stream Proxy</div>
-    </div>
-    <div class="phase-card">
-      <div class="label">D3</div>
-      <div class="value">⏳</div>
-      <div class="desc">F2 会话存储 + 章节时间线</div>
-    </div>
+    <div class="phase-card"><div class="label">D1</div><div class="value">✓</div><div class="desc">骨架 + SQLite 建表 + Express 起服务</div></div>
+    <div class="phase-card"><div class="label">D2</div><div class="value">✓</div><div class="desc">OpenAI 兼容 Stream Proxy(undici 自写)</div></div>
+    <div class="phase-card"><div class="label">D3</div><div class="value">✓</div><div class="desc">会话存储 + replay + 级联删 + chunk 落库</div></div>
+    <div class="phase-card"><div class="label">D4</div><div class="value">✓</div><div class="desc">Proxy 加固:SSE 跨包缓冲 + 真 token 统计</div></div>
+    <div class="phase-card"><div class="label">D5/D6</div><div class="value">✓</div><div class="desc">状态机定义 + ECharts Sankey/字符流可视化</div></div>
+    <div class="phase-card"><div class="label">D7-D14</div><div class="value">⏳</div><div class="desc">完善 + 部署 + 录 demo</div></div>
   </div>
 
   <div class="endpoints">
     <h2>可用 API 端点</h2>
-    <div class="endpoint">
-      <span class="method get">GET</span>
-      <span class="path">/health</span>
-      <span class="desc-inline">健康检查 + DB 统计</span>
-    </div>
-    <div class="endpoint">
-      <span class="method get">GET</span>
-      <span class="path">/sessions</span>
-      <span class="desc-inline">列出所有会话(D2/D4 完善)</span>
-    </div>
-    <div class="endpoint">
-      <span class="method get">GET</span>
-      <span class="path">/sessions/:id</span>
-      <span class="desc-inline">单会话详情 + events 流</span>
-    </div>
-    <div class="endpoint">
-      <span class="method proxy">D2</span>
-      <span class="path">/proxy/v1/chat/completions</span>
-      <span class="desc-inline">OpenAI 兼容 Stream Proxy(明天实现)</span>
-    </div>
+    <div class="endpoint"><span class="method get">GET</span><span class="path">/health</span><span class="desc-inline">健康检查 + DB 统计</span></div>
+    <div class="endpoint"><span class="method get">GET</span><span class="path">/sessions</span><span class="desc-inline">列出所有会话</span></div>
+    <div class="endpoint"><span class="method get">GET</span><span class="path">/sessions/:id</span><span class="desc-inline">单会话详情 + events 流</span></div>
+    <div class="endpoint"><span class="method get">GET</span><span class="path">/analytics/statemachine</span><span class="desc-inline">状态机定义(Sankey 数据源)</span></div>
+    <div class="endpoint"><span class="method proxy">POST</span><span class="path">/proxy/v1/chat/completions</span><span class="desc-inline">OpenAI 兼容 Stream Proxy</span></div>
+    <div class="endpoint"><span class="method get">GET</span><span class="path">/dashboard.html</span><span class="desc-inline">📊 可视化调试面板</span></div>
   </div>
 </body>
 </html>
