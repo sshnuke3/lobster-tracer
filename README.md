@@ -10,7 +10,7 @@
 - 看 prompt / token 流(像 Chrome DevTools 的 Network)
 - 看状态机迁移(像 Chrome DevTools 的 State · ECharts Sankey)
 - 异常检测(断流/超时/重复/JSON 解析失败)
-- 一键导出诊断报告(Markdown / 小红书图文)
+- 一键导出诊断报告（Markdown / 小红书图文）— _规划中,见路线图_
 
 ## 🚀 公网链接
 
@@ -37,12 +37,13 @@ D9 起所有写接口、`/proxy` 与 WebSocket 均已带鉴权,但**默认不强
 
 | 变量 | 作用 | 公网必设? |
 |---|---|---|
-| `ADMIN_TOKEN` | 写接口(`/proxy` + 5 个 analytics/delete/replay)与 WebSocket 的 Bearer / `?token=` 校验密钥 | **是** |
+| `ADMIN_TOKEN` | 写接口(`/proxy` + 5 个 analytics/delete/replay)与 WebSocket 的 Bearer / `?token=` 校验密钥 | 公开 demo **不设置**(实例匿名开放);生产部署 **必设** 强随机串 |
 | `WS_ALLOWED_ORIGIN` | WebSocket 仅允许的来源,防跨站订阅(如 `https://lobster-tracer-production.up.railway.app`) | 建议 |
 
-- **Railway**:Variables 加 `ADMIN_TOKEN`(强随机串)+ `WS_ALLOWED_ORIGIN`(前端域名)→ 重新部署即收口。
+- **Railway(公开 demo)**:Variables 删掉 `ADMIN_TOKEN` + 新增 `DEMO_MODE=1` → 实例匿名开放且启动自动灌示例数据(重启自愈)。
+- **Railway(生产)**:Variables 加 `ADMIN_TOKEN`(强随机串)+ `WS_ALLOWED_ORIGIN`(前端域名)→ 重新部署即收口。
 - **本地**:`cp .env.example .env`(已被 `.gitignore` 忽略)填入 `ADMIN_TOKEN`,启动前 `set -a; . ./.env; set +a`(项目无 dotenv 自动加载)。
-- 启用 `ADMIN_TOKEN` 后,打开 dashboard 需带 `?token=你的ADMIN_TOKEN` 才能建立 WS 实时连接。
+- 启用 `ADMIN_TOKEN` 后,打开 dashboard 需带 `?token=你的ADMIN_TOKEN` 才能建立 WS 实时连接;公开 demo 不设则直接访问。
 
 ## 📡 API 端点
 
@@ -84,8 +85,9 @@ npm test   # 运行 test/smoke.mjs —— 子进程起服务,自动校验 /healt
 | **D9** | **8.2** | **安全加固:合并多份审计修复(鉴权/限流/XSS 全转义/WS token+心跳/错误脱敏,剔除通配 CORS)** | ✅ |
 | **D10** | **8.3** | **多会话聚合分析(跨会话 token 汇总 / 各模型消耗 / 状态机自环卡死信号 / Top 会话排行,Fleet 可观测性)** | ✅ |
 | **D11** | **8.4** | **收尾工程:LICENSE 文件(MIT 全文)+ 最小冒烟测试(修审计 #18 零测试)** | ✅ |
-| D12 | 8.5 | 一键导出诊断报告(Markdown / 小红书图文,对齐产品定位) | ⏳ |
-| D13-14 | 8.6-7 | 录 2-3min demo + 写 Qoder 赛道 pitch | ⏳ |
+| D12 | 8.5 | 残余安全加固(v3 审计报告):XSS + proxy 日志 + /sessions/:id 鉴权 | ✅ |
+| D12.5 | 8.5 | demo 自动 seed + 单一公开实例(DEMO_MODE,满足赛事公开可访问要求) | ✅ |
+| D13-14 | 8.6-7 | 作品使用手册(已完成) + 小红书图文笔记(待发) | ⏳ |
 | **D15** | **8.9** | **提交 Qoder 赛道** | ⏳ |
 
 ## 🏆 参赛赛道
@@ -106,6 +108,6 @@ MIT
 
 ---
 
-*更新时间: 2026-07-27*  
-*版本 v0.5.4*  
+*更新时间: 2026-07-28*  
+*版本 v0.5.6*  
 *部署平台: Railway*
