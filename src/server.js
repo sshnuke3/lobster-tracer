@@ -5,7 +5,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { initDB, listSessions, getSession, getStats, deleteSession, insertSession, insertEvent, insertTransition, getTransitionAggregate, hasRealTransitions, clearTransitions, getAggregateStats } from './db.js';
+import { initDB, listSessions, getSession, getStats, deleteSession, insertSession, insertEvent, insertTransition, getTransitionAggregate, hasRealTransitions, clearTransitions, getAggregateStats, completeSession, failSession } from './db.js';
 import { handleProxy } from './proxy.js';
 import { setupWS } from './realtime.js';
 
@@ -16,6 +16,14 @@ const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../data/lobster-tra
 const app = express();
 
 initDB(DB_PATH);
+
+// [D12.5] demo 自动 seed:DEMO_MODE=1 且当前无真实迁移数据时,启动即灌示例数据
+// 解决 Railway ephemeral 文件系统重启 / 重部署后 DB 清空 → 评审看到空白面板的问题
+// 本地开发 / CI 不设 DEMO_MODE,不自动灌,避免污染
+if (process.env.DEMO_MODE === '1' && !hasRealTransitions()) {
+  seedDemoData();
+  console.log('[demo] auto-seeded demo data (DEMO_MODE=1)');
+}
 
 // 中间件
 app.use(express.json({ limit: '1mb' })); // [AUDIT #9] 10mb→1mb,避免大 body 滥用
@@ -56,7 +64,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.5',
+    version: '0.5.6',
     phase: 'D8-realtime-ws',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
@@ -142,10 +150,10 @@ app.post('/analytics/transition', requireToken, express.json(), (req, res) => {
   res.json({ ok: true, id });
 });
 
-// D7: 注入一条真实的 xiaoshuo-cli 长文工作流(含 self-loop 与 error 恢复)
-// 用于 demo:让 Sankey 立刻显示真实迁移数据,不必先接上游
-app.post('/analytics/seed', requireToken, (req, res) => {
-  console.warn('[audit] seed demo workflow');
+// D7/D12.5: 注入示例工作流(状态机迁移 + 示例会话),让 dashboard 全饱满
+// 抽成 seedDemoData() 复用:POST /analytics/seed 手动触发,或 DEMO_MODE=1 启动时自动触发
+function seedDemoData() {
+  // 1) 状态机迁移(让 Sankey 立即有真实路径,含 self-loop 与 error 恢复)
   const steps = [
     ['init', 'outline', 'start'],
     ['outline', 'outline_confirm', 'outline ready'],
@@ -163,11 +171,47 @@ app.post('/analytics/seed', requireToken, (req, res) => {
     ['continue', 'verify', 're-verify'],
     ['verify', 'done', 'pass']
   ];
-  // 跑两遍,制造更真实的频次差异
   for (let r = 0; r < 2; r++) {
     for (const [from, to, reason] of steps) insertTransition({ from, to, reason });
   }
-  res.json({ ok: true, seeded: steps.length * 2 });
+
+  // 2) 示例会话(让会话列表 / 聚合面板饱满:覆盖完成 / 进行中 / 失败三种状态)
+  const demoSessions = [
+    {
+      project: 'xiaoshuo-cli', model: 'qwen3.6-flash', phase: 'done', status: 'completed',
+      prompt: '写一篇关于赛博朋克侦探的 3000 字短篇小说，先列大纲再逐章生成。',
+      response: '霓虹在雨里晕开，他点燃最后一支烟……（示例正文）',
+      promptTokens: 1280, completionTokens: 4200, durationMs: 38000
+    },
+    {
+      project: 'xiaoshuo-cli', model: 'qwen3.6-plus', phase: 'chapter_gen', status: 'running',
+      prompt: '生成第 5 章：主角潜入公司数据中心获取证据。',
+      response: '通风管道很窄，他屏住呼吸向前爬……（示例中间产出）',
+      promptTokens: 960, completionTokens: 3100, durationMs: 26000
+    },
+    {
+      project: 'report-gen', model: 'qwen3.6-flash', phase: 'error', status: 'failed',
+      prompt: '根据 Q2 销售数据生成季度复盘报告。',
+      response: null, error: 'upstream timeout (demo)',
+      promptTokens: 540, completionTokens: 0, durationMs: 12000
+    }
+  ];
+  for (const ds of demoSessions) {
+    const { id } = insertSession({ project: ds.project, phase: ds.phase, prompt: ds.prompt, model: ds.model });
+    insertEvent({ sessionId: id, eventType: 'state_transition', payload: { from: 'init', to: ds.phase, reason: 'demo seed' } });
+    if (ds.response) insertEvent({ sessionId: id, eventType: 'chunk', payload: { text: ds.response } });
+    if (ds.status === 'completed') {
+      completeSession({ sessionId: id, response: ds.response, promptTokens: ds.promptTokens, completionTokens: ds.completionTokens, durationMs: ds.durationMs });
+    }
+    if (ds.status === 'failed') {
+      failSession({ sessionId: id, error: ds.error || 'demo failure' });
+    }
+  }
+}
+
+app.post('/analytics/seed', requireToken, (req, res) => {
+  seedDemoData();
+  res.json({ ok: true });
 });
 
 // D7: 清空真实迁移数据(demo 重置)
