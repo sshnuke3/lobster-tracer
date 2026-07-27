@@ -103,7 +103,10 @@ let currentSessionId = null;
 let ws, liveTimer;
 function connectWS() {
   const live = document.getElementById('liveWrap');
-  try { ws = new WebSocket(`ws://${location.host}`); } catch { return; }
+  // [AUDIT #2/P0] 若 URL 带 ?token= 则转发到 WS(启用 ADMIN_TOKEN 后前端鉴权)
+  const _wt = new URLSearchParams(location.search).get('token');
+  const _wsUrl = `ws://${location.host}${_wt ? `?token=${encodeURIComponent(_wt)}` : ''}`;
+  try { ws = new WebSocket(_wsUrl); } catch { return; }
   ws.onopen = () => { live.className = 'live on'; document.getElementById('liveText').textContent = '实时'; };
   ws.onclose = () => { live.className = 'live'; document.getElementById('liveText').textContent = '已断开·重连中'; setTimeout(connectWS, 2000); };
   ws.onerror = () => { live.className = 'live'; };

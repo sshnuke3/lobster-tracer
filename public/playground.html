@@ -181,6 +181,16 @@ let selectedSessionId = null;
 let sessionOffset = 0;
 const PAGE_SIZE = 20;
 
+// [AUDIT #5] 全转义 HTML 特殊字符(与 dashboard.html 对齐):原仅转义 <,漏 " ' & >
+function escapeHtml(s) {
+  return (s == null ? '' : String(s))
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function filterSessions() {
   const kw = (document.getElementById('searchBox').value || '').toLowerCase();
   const model = document.getElementById('modelFilter').value;
@@ -195,20 +205,20 @@ function filterSessions() {
     return;
   }
   list.innerHTML = filtered.map(s => {
-    const prompt = (s.prompt || '').replace(/</g, '&lt;').slice(0, 60);
+    const prompt = escapeHtml(s.prompt).slice(0, 60);
     const startedAt = s.started_at ? new Date(s.started_at).toLocaleString('zh-CN') : '-';
     const selectedClass = s.id === selectedSessionId ? ' selected' : '';
     return `
-      <div class="session-item${selectedClass}" onclick="loadSessionDetail('${s.id}')">
+      <div class="session-item${selectedClass}" onclick="loadSessionDetail('${escapeHtml(s.id)}')">
         <div>
-          <span class="id">${s.id.slice(0, 8)}...</span>
-          <span class="status ${s.status}">${s.status}</span>
+          <span class="id">${escapeHtml(s.id.slice(0, 8))}...</span>
+          <span class="status ${escapeHtml(s.status)}">${escapeHtml(s.status)}</span>
         </div>
         <div>
-          <span class="model">${s.model || '?'}</span> ·
-          <span style="font-size:11px;color:#888;">${startedAt}</span> ·
-          <span style="font-size:11px;color:#888;">${s.duration_ms || 0}ms</span>
-          ${s.prompt_tokens ? `· <span style="font-size:11px;color:#888;">${s.prompt_tokens}+${s.completion_tokens} tok</span>` : ''}
+          <span class="model">${escapeHtml(s.model || '?')}</span> ·
+          <span style="font-size:11px;color:#888;">${escapeHtml(startedAt)}</span> ·
+          <span style="font-size:11px;color:#888;">${escapeHtml(String(s.duration_ms || 0))}ms</span>
+          ${s.prompt_tokens ? `· <span style="font-size:11px;color:#888;">${escapeHtml(String(s.prompt_tokens))}+${escapeHtml(String(s.completion_tokens))} tok</span>` : ''}
         </div>
         <div class="prompt">${prompt}${prompt.length >= 60 ? '...' : ''}</div>
       </div>
@@ -303,20 +313,20 @@ function renderSessionList() {
     return;
   }
   list.innerHTML = currentSessions.map(s => {
-    const prompt = (s.prompt || '').replace(/</g, '&lt;').slice(0, 60);
+    const prompt = escapeHtml(s.prompt).slice(0, 60);
     const startedAt = s.started_at ? new Date(s.started_at).toLocaleString('zh-CN') : '-';
     const selectedClass = s.id === selectedSessionId ? ' selected' : '';
     return `
-      <div class="session-item${selectedClass}" onclick="loadSessionDetail('${s.id}')">
+      <div class="session-item${selectedClass}" onclick="loadSessionDetail('${escapeHtml(s.id)}')">
         <div>
-          <span class="id">${s.id.slice(0, 8)}...</span>
-          <span class="status ${s.status}">${s.status}</span>
+          <span class="id">${escapeHtml(s.id.slice(0, 8))}...</span>
+          <span class="status ${escapeHtml(s.status)}">${escapeHtml(s.status)}</span>
         </div>
         <div>
-          <span class="model">${s.model || '?'}</span> ·
-          <span style="font-size:11px;color:#888;">${startedAt}</span> ·
-          <span style="font-size:11px;color:#888;">${s.duration_ms || 0}ms</span>
-          ${s.prompt_tokens ? `· <span style="font-size:11px;color:#888;">${s.prompt_tokens}+${s.completion_tokens} tok</span>` : ''}
+          <span class="model">${escapeHtml(s.model || '?')}</span> ·
+          <span style="font-size:11px;color:#888;">${escapeHtml(startedAt)}</span> ·
+          <span style="font-size:11px;color:#888;">${escapeHtml(String(s.duration_ms || 0))}ms</span>
+          ${s.prompt_tokens ? `· <span style="font-size:11px;color:#888;">${escapeHtml(String(s.prompt_tokens))}+${escapeHtml(String(s.completion_tokens))} tok</span>` : ''}
         </div>
         <div class="prompt">${prompt}${prompt.length >= 60 ? '...' : ''}</div>
       </div>
@@ -353,37 +363,37 @@ function renderSessionDetail(data) {
   let html = `
     <h3>📋 基本信息</h3>
     <div class="info-grid">
-      <label>ID:</label><span style="font-family:monospace;font-size:11px;">${s.id}</span>
-      <label>Model:</label><span><strong>${s.model || '?'}</strong></span>
-      <label>Status:</label><span><span class="status ${s.status}">${s.status}</span></span>
-      <label>Project:</label><span>${s.project || '-'}</span>
-      <label>Phase:</label><span>${s.phase || '-'}</span>
-      <label>Started:</label><span>${startedAt}</span>
-      <label>Finished:</label><span>${finishedAt}</span>
-      <label>Duration:</label><span><strong>${s.duration_ms || 0}</strong> ms</span>
-      <label>Tokens:</label><span>${s.prompt_tokens || 0} prompt + ${s.completion_tokens || 0} completion = <strong>${(s.prompt_tokens || 0) + (s.completion_tokens || 0)}</strong> total</span>
+      <label>ID:</label><span style="font-family:monospace;font-size:11px;">${escapeHtml(s.id)}</span>
+      <label>Model:</label><span><strong>${escapeHtml(s.model || '?')}</strong></span>
+      <label>Status:</label><span><span class="status ${escapeHtml(s.status)}">${escapeHtml(s.status)}</span></span>
+      <label>Project:</label><span>${escapeHtml(s.project || '-')}</span>
+      <label>Phase:</label><span>${escapeHtml(s.phase || '-')}</span>
+      <label>Started:</label><span>${escapeHtml(startedAt)}</span>
+      <label>Finished:</label><span>${escapeHtml(finishedAt)}</span>
+      <label>Duration:</label><span><strong>${escapeHtml(String(s.duration_ms || 0))}</strong> ms</span>
+      <label>Tokens:</label><span>${escapeHtml(String(s.prompt_tokens || 0))} prompt + ${escapeHtml(String(s.completion_tokens || 0))} completion = <strong>${escapeHtml(String((s.prompt_tokens || 0) + (s.completion_tokens || 0)))}</strong> total</span>
     </div>
 
     <h3>💬 Prompt</h3>
-    <div class="output" style="min-height:60px;max-height:150px;">${(s.prompt || '').replace(/</g, '&lt;')}</div>
+    <div class="output" style="min-height:60px;max-height:150px;">${escapeHtml(s.prompt || '')}</div>
   `;
 
   if (s.response) {
     html += `
       <h3>🤖 Response</h3>
-      <div class="output" style="min-height:60px;max-height:200px;">${(s.response || '').replace(/</g, '&lt;')}</div>
+      <div class="output" style="min-height:60px;max-height:200px;">${escapeHtml(s.response || '')}</div>
     `;
   }
 
   if (s.error) {
     html += `
       <h3>❌ Error</h3>
-      <div class="output" style="border-left:3px solid #FF5252;">${(s.error || '').replace(/</g, '&lt;')}</div>
+      <div class="output" style="border-left:3px solid #FF5252;">${escapeHtml(s.error || '')}</div>
     `;
   }
 
   if (events.length > 0) {
-    html += `<h3>📊 Events 时间线 (${events.length} 个)</h3><div class="timeline">`;
+    html += `<h3>📊 Events 时间线 (${escapeHtml(String(events.length))} 个)</h3><div class="timeline">`;
     let prevTime = null;
     events.forEach((evt, idx) => {
       const t = new Date(evt.created_at);
@@ -393,12 +403,12 @@ function renderSessionDetail(data) {
       const isState = evt.event_type === 'state_transition';
       const isError = evt.event_type === 'error';
       const cssClass = isChunk ? 'chunk' : isState ? 'state' : isError ? 'error' : '';
-      const payload = evt.payload ? evt.payload.replace(/</g, '&lt;').slice(0, 200) : '';
+      const payload = evt.payload ? escapeHtml(evt.payload).slice(0, 200) : '';
       html += `
         <div class="timeline-event ${cssClass}">
-          <span class="time">${evt.created_at.slice(11, 23)}</span>
-          <span class="type">[${idx + 1}/${events.length}] ${evt.event_type}</span>
-          ${delta > 0 ? `<span class="delta">+${delta}ms</span>` : ''}
+          <span class="time">${escapeHtml(evt.created_at.slice(11, 23))}</span>
+          <span class="type">[${escapeHtml(String(idx + 1))}/${escapeHtml(String(events.length))}] ${escapeHtml(evt.event_type)}</span>
+          ${delta > 0 ? `<span class="delta">+${escapeHtml(String(delta))}ms</span>` : ''}
           ${payload ? `<div style="font-size:11px;color:#666;margin-top:4px;font-family:monospace;">${payload}${payload.length >= 200 ? '...' : ''}</div>` : ''}
         </div>
       `;

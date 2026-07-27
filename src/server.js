@@ -18,15 +18,45 @@ const app = express();
 initDB(DB_PATH);
 
 // 中间件
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' })); // [AUDIT #9] 10mb→1mb,避免大 body 滥用
 app.use(express.static(path.join(__dirname, '../public')));
+
+// [AUDIT #6] 写接口最小鉴权:通过 ADMIN_TOKEN 环境变量校验 Bearer token
+//   未设 ADMIN_TOKEN 时放行(本地开发友好);生产环境务必设置
+function requireToken(req, res, next) {
+  const expected = process.env.ADMIN_TOKEN;
+  if (!expected) return next(); // 未配置则不强制(本地开发)
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (token !== expected) return res.status(401).json({ error: 'unauthorized: invalid or missing ADMIN_TOKEN' });
+  next();
+}
+
+// [AUDIT #4/限流] 轻量内存固定窗口限流(无新依赖);proxy 严格、其余宽松
+function rateLimit({ windowMs = 60000, max = 60 } = {}) {
+  const hits = new Map(); // key: ip -> { count, start }
+  setInterval(() => hits.clear(), windowMs).unref(); // 窗口滚动清空,不阻塞进程退出
+  return (req, res, next) => {
+    const k = (req.headers['x-forwarded-for']?.split(',')[0].trim()) || req.ip || 'unknown';
+    const now = Date.now();
+    const rec = hits.get(k) || { count: 0, start: now };
+    if (now - rec.start > windowMs) { rec.count = 0; rec.start = now; }
+    rec.count++;
+    hits.set(k, rec);
+    if (rec.count > max) return res.status(429).json({ error: 'too many requests, slow down' });
+    next();
+  };
+}
+const limiterProxy = rateLimit({ windowMs: 60000, max: 20 });   // proxy: 20/min,防上游配额燃烧
+const limiterGeneral = rateLimit({ windowMs: 60000, max: 120 }); // 其余: 120/min
+app.use(limiterGeneral);
 
 // /health 健康检查
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.1',
+    version: '0.5.2',
     phase: 'D8-realtime-ws',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
@@ -34,9 +64,12 @@ app.get('/health', (req, res) => {
 });
 
 // /sessions 列表
+// [AUDIT #3] 读取 offset 传给 listSessions; [AUDIT #12] limit clamp 到 [1,200] 防全表扫描
 app.get('/sessions', (req, res) => {
-  const limit = parseInt(req.query.limit) || 50;
-  const sessions = listSessions(limit);
+  const rawLimit = parseInt(req.query.limit) || 50;
+  const limit = Math.max(1, Math.min(200, rawLimit));
+  const offset = Math.max(0, parseInt(req.query.offset) || 0);
+  const sessions = listSessions(limit, offset);
   res.json({ sessions, count: sessions.length });
 });
 
@@ -85,16 +118,24 @@ app.get('/analytics/statemachine', (req, res) => {
 
 // D7: 记录一次状态机迁移(上游长文工作流/多 Agent 系统的集成点)
 // 请求体: { from, to, reason?, sessionId? }  —— xiaoshuo-cli 每次 phase 变更调用一次
-app.post('/analytics/transition', express.json(), (req, res) => {
+// [AUDIT #4] 白名单校验 from/to:防止注入任意状态名污染 Sankey、撑爆 phases 集合
+// [AUDIT #6] 加 requireToken 鉴权
+app.post('/analytics/transition', requireToken, express.json(), (req, res) => {
   const { from, to, reason, sessionId } = req.body || {};
   if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+  const VALID = new Set(PHASE_MACHINE.phases);
+  if (!VALID.has(from) || !VALID.has(to)) {
+    return res.status(400).json({ error: `invalid phase, allowed: ${PHASE_MACHINE.phases.join(',')}` });
+  }
+  console.warn('[audit] transition', { from, to, sessionId });
   const id = insertTransition({ sessionId: sessionId || null, from, to, reason });
   res.json({ ok: true, id });
 });
 
 // D7: 注入一条真实的 xiaoshuo-cli 长文工作流(含 self-loop 与 error 恢复)
 // 用于 demo:让 Sankey 立刻显示真实迁移数据,不必先接上游
-app.post('/analytics/seed', (req, res) => {
+app.post('/analytics/seed', requireToken, (req, res) => {
+  console.warn('[audit] seed demo workflow');
   const steps = [
     ['init', 'outline', 'start'],
     ['outline', 'outline_confirm', 'outline ready'],
@@ -119,13 +160,15 @@ app.post('/analytics/seed', (req, res) => {
 });
 
 // D7: 清空真实迁移数据(demo 重置)
-app.delete('/analytics/transitions', (req, res) => {
+app.delete('/analytics/transitions', requireToken, (req, res) => {
+  console.warn('[audit] clear transitions');
   clearTransitions();
   res.json({ ok: true });
 });
 
 // D3.5: DELETE /sessions/:id 级联删 session + events
-app.delete('/sessions/:id', (req, res) => {
+app.delete('/sessions/:id', requireToken, (req, res) => {
+  console.warn('[audit] delete session', req.params.id);
   const result = getSession(req.params.id);
   if (!result) return res.status(404).json({ error: 'session not found' });
   const r = deleteSession(req.params.id);
@@ -133,7 +176,8 @@ app.delete('/sessions/:id', (req, res) => {
 });
 
 // D3.5: POST /sessions/:id/replay 用历史 prompt + model + metadata 再发一次
-app.post('/sessions/:id/replay', async (req, res) => {
+app.post('/sessions/:id/replay', requireToken, async (req, res) => {
+  console.warn('[audit] replay session', req.params.id);
   const result = getSession(req.params.id);
   if (!result) return res.status(404).json({ error: 'session not found' });
   const s = result.session;
@@ -149,8 +193,8 @@ app.post('/sessions/:id/replay', async (req, res) => {
   return handleProxy(req, res);
 });
 
-// D2: Stream Proxy 路由
-app.post('/proxy/v1/chat/completions', handleProxy);
+// D2: Stream Proxy 路由 —— [AUDIT #2/P0] 限流 + 鉴权(ADMIN_TOKEN 未设则本地放行)
+app.post('/proxy/v1/chat/completions', limiterProxy, requireToken, handleProxy);
 
 const server = app.listen(PORT, () => {
   setupWS(server); // D8: WebSocket 挂在 http.Server 上,复用同端口实时推 chunk/状态变更到面板

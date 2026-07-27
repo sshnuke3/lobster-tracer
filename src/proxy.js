@@ -43,7 +43,8 @@ export async function handleProxy(req, res) {
   if (!OPENAI_API_KEY) {
     logEvent(sessionId, 'error', { reason: 'OPENAI_API_KEY missing' });
     failSession({ sessionId, error: 'OPENAI_API_KEY missing' });
-    return res.status(500).json({ error: 'OPENAI_API_KEY not configured in Railway env vars' });
+    console.error('[proxy] OPENAI_API_KEY missing');
+    return res.status(500).json({ error: 'service configuration error' }); // [AUDIT #3] 不泄露部署平台/配置
   }
 
   logEvent(sessionId, 'proxy_forward', { model, isStream, base: OPENAI_API_BASE });
@@ -72,15 +73,20 @@ export async function handleProxy(req, res) {
   } catch (err) {
     logEvent(sessionId, 'error', { phase: 'upstream_request', error: err.message });
     failSession({ sessionId, error: err.message });
-    return res.status(502).json({ error: err.message });
+    console.error('[proxy] upstream request failed:', err.message);
+    return res.status(502).json({ error: 'upstream request failed' }); // [AUDIT #3] 不泄露上游网络细节
   }
 
   // 4. 流式响应 - 抓每个 chunk
   if (isStream) {
+    // [AUDIT #1] 透传上游状态码:避免 4xx/5xx 被当 200,客户端误判、会话误标 completed
+    res.status(upstreamResponse.statusCode);
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Session-Id', sessionId);
+    // [AUDIT #2] 客户端断开时销毁上游流,防止 TCP 连接泄漏(长会话下耗尽连接池)
+    res.on('close', () => { try { upstreamResponse.body.destroy(); } catch (_) { /* already closed */ } });
 
     let fullResponse = '';
     let chunkCount = 0;

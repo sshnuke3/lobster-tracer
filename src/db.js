@@ -81,7 +81,8 @@ export function insertEvent({ sessionId, eventType, payload }) {
     VALUES (?, ?, ?, ?)
   `).run(sessionId, eventType, payload ? JSON.stringify(payload) : null, new Date().toISOString());
   // D8: 落库即广播,让 WebSocket 客户端(调试面板)即时收到 —— 不去重、不节流,保真
-  try { broadcast('event', { sessionId, eventType, payload }); } catch { /* swallow */ }
+  // [AUDIT #9] 改异步广播:setImmediate 解耦,避免高频 chunk 下同步 emit 阻塞 DB 写线程
+  try { setImmediate(() => broadcast('event', { sessionId, eventType, payload })); } catch { /* swallow */ }
 }
 
 // 完成 session
@@ -103,23 +104,28 @@ export function failSession({ sessionId, error }) {
 }
 
 // D3.5: 删除 session(级联删 events)
+// [AUDIT #8] 包进事务:避免删 events 后第二步失败留下孤儿 session(无 events)
 export function deleteSession(id) {
-  const result = db.prepare('DELETE FROM events WHERE session_id = ?').run(id);
-  const eventsDeleted = result.changes;
-  const r2 = db.prepare('DELETE FROM sessions WHERE id = ?').run(id);
-  const sessionDeleted = r2.changes;
-  return { sessionDeleted, eventsDeleted };
+  const tx = db.transaction(() => {
+    const result = db.prepare('DELETE FROM events WHERE session_id = ?').run(id);
+    const eventsDeleted = result.changes;
+    const r2 = db.prepare('DELETE FROM sessions WHERE id = ?').run(id);
+    const sessionDeleted = r2.changes;
+    return { sessionDeleted, eventsDeleted };
+  });
+  return tx();
 }
 
 // 查询 sessions
-export function listSessions(limit = 50) {
+// [AUDIT #3] 支持 offset:配合前端"加载更多",原实现忽略 offset 导致重复返回第一页
+export function listSessions(limit = 50, offset = 0) {
   return db.prepare(`
     SELECT id, project, phase, status, model, prompt_tokens, completion_tokens,
            duration_ms, started_at, finished_at
     FROM sessions
     ORDER BY started_at DESC
-    LIMIT ?
-  `).all(limit);
+    LIMIT ? OFFSET ?
+  `).all(limit, offset);
 }
 
 // 查询 session 详情
@@ -157,16 +163,21 @@ export function insertTransition({ sessionId, from, to, reason }) {
 }
 
 // D7: 聚合真实迁移数据(供 Sankey 使用)。返回 { edges:[{from,to,value,reasons}], phases:[...] }
-// 按 from→to 求和得到边权重;reasons 用 GROUP_CONCAT 合并该边出现过的迁移原因
+// 按 from→to 求和得到边权重;reasons 用 JSON_GROUP_ARRAY 合并为 JSON 数组
+// [AUDIT #14] 改用 JSON_GROUP_ARRAY:原 GROUP_CONCAT 用逗号拼接,reason 含逗号时前端 split(',') 会误拆
 export function getTransitionAggregate() {
   const rows = db.prepare(`
     SELECT from_phase as "from", to_phase as "to", COUNT(*) as value,
-           GROUP_CONCAT(DISTINCT reason) as reasons
+           JSON_GROUP_ARRAY(DISTINCT reason) as reasons_json
     FROM transitions
     GROUP BY from_phase, to_phase
     ORDER BY value DESC
   `).all();
-  const edges = rows.map(r => ({ from: r.from, to: r.to, value: r.value, reasons: r.reasons || '' }));
+  const edges = rows.map(r => {
+    let reasons = '';
+    try { reasons = JSON.parse(r.reasons_json || '[]').filter(Boolean).join(', '); } catch { reasons = ''; }
+    return { from: r.from, to: r.to, value: r.value, reasons };
+  });
   const phases = [...new Set(edges.flatMap(e => [e.from, e.to]))];
   return { edges, phases };
 }
