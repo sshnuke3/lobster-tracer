@@ -43,6 +43,20 @@ export function initDB(dbPath) {
 
     -- FK 不自动建索引,events 按 session_id 查询频繁,显式建索引避免全表扫
     CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
+
+    -- D7: 状态机迁移表(真实工作流路径,对应 Sankey 可视化)
+    -- session_id 可空(工作流级迁移不依赖单次会话);删除会话时置 NULL 而非级联删
+    CREATE TABLE IF NOT EXISTS transitions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT,
+      from_phase TEXT NOT NULL,
+      to_phase TEXT NOT NULL,
+      reason TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_transitions_session ON transitions(session_id);
   `);
 
   return db;
@@ -128,4 +142,39 @@ export function getStats() {
       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
     FROM sessions
   `).get();
+}
+
+// D7: 记录一次状态机迁移(from → to,reason 说明为何迁移)
+export function insertTransition({ sessionId, from, to, reason }) {
+  const id = db.prepare(`
+    INSERT INTO transitions (session_id, from_phase, to_phase, reason, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(sessionId ?? null, from, to, reason || null, new Date().toISOString());
+  return id.lastInsertRowid;
+}
+
+// D7: 聚合真实迁移数据(供 Sankey 使用)。返回 { edges:[{from,to,value,reasons}], phases:[...] }
+// 按 from→to 求和得到边权重;reasons 用 GROUP_CONCAT 合并该边出现过的迁移原因
+export function getTransitionAggregate() {
+  const rows = db.prepare(`
+    SELECT from_phase as "from", to_phase as "to", COUNT(*) as value,
+           GROUP_CONCAT(DISTINCT reason) as reasons
+    FROM transitions
+    GROUP BY from_phase, to_phase
+    ORDER BY value DESC
+  `).all();
+  const edges = rows.map(r => ({ from: r.from, to: r.to, value: r.value, reasons: r.reasons || '' }));
+  const phases = [...new Set(edges.flatMap(e => [e.from, e.to]))];
+  return { edges, phases };
+}
+
+// D7: 真实迁移数据是否为空(决定 Sankey 用真实还是参考状态机)
+export function hasRealTransitions() {
+  const r = db.prepare('SELECT COUNT(*) as c FROM transitions').get();
+  return r.c > 0;
+}
+
+// D7: 清空真实迁移数据(用于 demo 重置)
+export function clearTransitions() {
+  db.prepare('DELETE FROM transitions').run();
 }

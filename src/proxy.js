@@ -2,9 +2,10 @@
 // 接收 /proxy/v1/chat/completions → 转发 OpenAI → 抓 chunk 落 DB → 流式返回
 // D4 修复:① SSE 跨 TCP 包缓冲(不再丢被切开的 delta) ② 用 usage 字段真算 token
 //        ③ 入库去截断(完整存 prompt/response) ④ 日志写失败绝不中断流式转发
+// D7: ⑤ 会话启动时把 metadata.phase 作为首个真实迁移 init → phase 落库(让 Sankey 有真实数据)
 
 import { request } from 'undici';
-import { insertSession, insertEvent, completeSession, failSession } from './db.js';
+import { insertSession, insertEvent, completeSession, failSession, insertTransition } from './db.js';
 
 // OpenAI 上游配置 - 主人用环境变量注入
 const OPENAI_API_BASE = process.env.OPENAI_API_BASE || 'https://api.openai.com/v1';
@@ -19,15 +20,22 @@ export async function handleProxy(req, res) {
   const requestBody = req.body;
   const model = requestBody?.model || 'unknown';
   const isStream = !!requestBody?.stream;
+  const reqPhase = requestBody?.metadata?.phase || null;
 
   // 1. 启动 session(完整存 prompt,不再 slice(0,500) 截断)
   const { id: sessionId } = insertSession({
     project: requestBody.metadata?.project || 'lobster-tracer',
-    phase: requestBody.metadata?.phase || null,
+    phase: reqPhase,
     prompt: JSON.stringify(requestBody.messages || []),
     model,
     metadata: { isStream, proxy: 'lobster-tracer-d4' }
   });
+
+  // D7: 首个真实迁移 —— 请求携带 phase 时记录 init → phase(即使 playground 也能生成真实边)
+  if (reqPhase) {
+    try { insertTransition({ sessionId, from: 'init', to: reqPhase, reason: 'session_start' }); }
+    catch (_) { /* swallow */ }
+  }
 
   const startTime = Date.now();
 

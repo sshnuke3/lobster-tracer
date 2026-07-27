@@ -5,7 +5,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { initDB, listSessions, getSession, getStats, deleteSession, insertSession, insertEvent } from './db.js';
+import { initDB, listSessions, getSession, getStats, deleteSession, insertSession, insertEvent, insertTransition, getTransitionAggregate, hasRealTransitions, clearTransitions } from './db.js';
 import { handleProxy } from './proxy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -25,8 +25,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.3.0',
-    phase: 'D4-statemachine-viz',
+    version: '0.4.0',
+    phase: 'D7-real-statemachine',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
   });
@@ -67,8 +67,60 @@ const PHASE_MACHINE = {
 };
 
 // D5/D6: 状态机定义接口(Sankey 可视化数据源)
+// D7: 有真实迁移数据时返回聚合后的真实路径,否则回退到参考状态机(确保面板永远有图)
 app.get('/analytics/statemachine', (req, res) => {
-  res.json(PHASE_MACHINE);
+  if (hasRealTransitions()) {
+    const { edges, phases } = getTransitionAggregate();
+    res.json({
+      source: 'real',
+      phases,
+      transitions: edges.map(e => ({ from: e.from, to: e.to, value: e.value, reasons: e.reasons })),
+      reference: PHASE_MACHINE
+    });
+  } else {
+    res.json({ source: 'reference', ...PHASE_MACHINE });
+  }
+});
+
+// D7: 记录一次状态机迁移(上游长文工作流/多 Agent 系统的集成点)
+// 请求体: { from, to, reason?, sessionId? }  —— xiaoshuo-cli 每次 phase 变更调用一次
+app.post('/analytics/transition', express.json(), (req, res) => {
+  const { from, to, reason, sessionId } = req.body || {};
+  if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+  const id = insertTransition({ sessionId: sessionId || null, from, to, reason });
+  res.json({ ok: true, id });
+});
+
+// D7: 注入一条真实的 xiaoshuo-cli 长文工作流(含 self-loop 与 error 恢复)
+// 用于 demo:让 Sankey 立刻显示真实迁移数据,不必先接上游
+app.post('/analytics/seed', (req, res) => {
+  const steps = [
+    ['init', 'outline', 'start'],
+    ['outline', 'outline_confirm', 'outline ready'],
+    ['outline_confirm', 'outline', 'user rejected outline (self-loop)'],
+    ['outline_confirm', 'chapter_plan', 'approved'],
+    ['chapter_plan', 'chapter_gen', 'plan ok'],
+    ['chapter_gen', 'continue', 'chapter 1 done'],
+    ['continue', 'verify', 'all chapters drafted'],
+    ['verify', 'continue', 'quality gap → redo'],
+    ['continue', 'chapter_gen', 'regenerate (loop)'],
+    ['chapter_gen', 'error', 'upstream timeout'],
+    ['error', 'chapter_gen', 'retry after error'],
+    ['chapter_gen', 'continue', 'retry ok'],
+    ['continue', 'verify', 're-verify'],
+    ['verify', 'done', 'pass']
+  ];
+  // 跑两遍,制造更真实的频次差异
+  for (let r = 0; r < 2; r++) {
+    for (const [from, to, reason] of steps) insertTransition({ from, to, reason });
+  }
+  res.json({ ok: true, seeded: steps.length * 2 });
+});
+
+// D7: 清空真实迁移数据(demo 重置)
+app.delete('/analytics/transitions', (req, res) => {
+  clearTransitions();
+  res.json({ ok: true });
 });
 
 // D3.5: DELETE /sessions/:id 级联删 session + events
@@ -100,11 +152,13 @@ app.post('/sessions/:id/replay', async (req, res) => {
 app.post('/proxy/v1/chat/completions', handleProxy);
 
 app.listen(PORT, () => {
-  console.log(`\n🦞 Lobster-Tracer 启动成功 (D2)`);
+  console.log(`\n🦞 Lobster-Tracer 启动成功 (D7)`);
   console.log(`   http://localhost:${PORT}/health`);
   console.log(`   POST http://localhost:${PORT}/proxy/v1/chat/completions`);
-  console.log(`\nD2 验收:`);
-  console.log(`   ✓ /health 返回 200`);
-  console.log(`   ✓ Stream Proxy 抓 chunk 落 DB`);
-  console.log(`   ✓ OPENAI_API_KEY 从环境变量读`);
+  console.log(`   POST http://localhost:${PORT}/analytics/transition  (上报 phase 迁移)`);
+  console.log(`   POST http://localhost:${PORT}/analytics/seed        (注入示例工作流)`);
+  console.log(`\nD7 验收:`);
+  console.log(`   ✓ 真实状态机迁移落库(transitions 表)`);
+  console.log(`   ✓ /analytics/statemachine 有真实数据则返回聚合路径`);
+  console.log(`   ✓ Sankey 从"参考"切换为"真实"`);
 });

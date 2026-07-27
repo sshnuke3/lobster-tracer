@@ -38,9 +38,12 @@ npm start
 | GET | `/health` | 健康检查 + DB 统计 |
 | GET | `/sessions` | 列出所有会话 |
 | GET | `/sessions/:id` | 单会话详情 + events 流 |
-| GET | `/analytics/statemachine` | 状态机定义(Sankey 数据源,参考 xiaoshuo-cli 真实工作流) |
-| POST | `/proxy/v1/chat/completions` | OpenAI 兼容 Stream Proxy |
-| GET | `/dashboard.html` | 📊 可视化调试面板 |
+| GET | `/analytics/statemachine` | 状态机定义(Sankey 数据源;有真实迁移数据时返回聚合路径,否则回退参考状态机) |
+| POST | `/analytics/transition` | 上报一次 phase 迁移 `{"from","to","reason?","sessionId?"}`(上游长文工作流的集成点) |
+| POST | `/analytics/seed` | 注入一条示例 xiaoshuo-cli 工作流(含 self-loop + error 恢复),demo 用 |
+| DELETE | `/analytics/transitions` | 清空真实迁移数据(demo 重置) |
+| POST | `/proxy/v1/chat/completions` | OpenAI 兼容 Stream Proxy(请求带 `metadata.phase` 会自动落 `init→phase` 迁移) |
+| GET | `/dashboard.html` | 📊 可视化调试面板(含"注入示例工作流"按钮) |
 | GET | `/playground.html` | ▶ Stream Proxy 测试 / 会话历史 |
 
 ## 📅 开发甘特图
@@ -53,7 +56,8 @@ npm start
 | D4 | 7.29 | Proxy 加固:SSE 跨包缓冲 + 真实 usage token 统计 + 入库去截断 | ✅ |
 | D5 | 7.30 | F3 状态机字段 + 阶段定义 | ✅ |
 | D6 | 7.31 | F3 状态机可视化(ECharts Sankey + 字符流时间线) | ✅ |
-| D7-D14 | 8.1-8 | 完善 + 部署 + 录 demo | ⏳ |
+| **D7** | **8.1** | **真实状态机迁移落库(transitions 表 + 聚合接口 + Sankey 切真实数据 + 示例注入)** | ✅ |
+| D8-D14 | 8.2-8 | WebSocket 实时推送 + 多会话聚合 + 鉴权 + 测试 + 录 demo | ⏳ |
 | **D15** | **8.9** | **提交 Qoder 赛道** | ⏳ |
 
 ## 🏆 参赛赛道
@@ -75,5 +79,5 @@ MIT
 ---
 
 *更新时间: 2026-07-27*  
-*版本 v0.3.0*  
+*版本 v0.4.0*  
 *部署平台: Railway*

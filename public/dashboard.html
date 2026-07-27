@@ -46,6 +46,11 @@
     button { padding: 6px 14px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600;
              cursor: pointer; background: #FF8B94; color: #fff; }
     button:hover { background: #FF6878; }
+    button.ghost { background: rgba(0,0,0,0.06); color: #666; }
+    button.ghost:hover { background: rgba(0,0,0,0.12); }
+    .badge { font-size: 10px; padding: 2px 9px; border-radius: 10px; font-weight: 700; vertical-align: middle; margin-left: 6px; }
+    .badge.real { background: #4CAF93; color: #fff; }
+    .badge.reference { background: #FFB74D; color: #fff; }
   </style>
 </head>
 <body>
@@ -60,7 +65,11 @@
 
   <div class="top">
     <div class="panel">
-      <h2>状态机迁移 (Phase State Machine · xiaoshuo-cli 真实工作流)</h2>
+      <h2>状态机迁移 <span id="srcBadge" class="badge reference">示例</span></h2>
+      <div class="toolbar">
+        <button onclick="seedDemo()">⚡ 注入示例工作流</button>
+        <button class="ghost" onclick="resetTransitions()">清空</button>
+      </div>
       <div id="sankey" class="chart"></div>
     </div>
     <div class="panel">
@@ -87,10 +96,17 @@ window.addEventListener('resize', () => { sankey.resize(); statusPie.resize(); }
 async function loadStateMachine() {
   try {
     const m = await (await fetch('/analytics/statemachine')).json();
-    const data = m.transitions.map(t => ({ source: t.from, target: t.to, value: t.value }));
+    const badge = document.getElementById('srcBadge');
+    if (m.source === 'real') { badge.textContent = '真实迁移数据'; badge.className = 'badge real'; }
+    else { badge.textContent = '示例状态机(暂无真实数据)'; badge.className = 'badge reference'; }
+    const data = m.transitions.map(t => ({ source: t.from, target: t.to, value: t.value, reasons: t.reasons || '' }));
     sankey.setOption({
-      tooltip: { trigger: 'item', formatter: p => p.dataType === 'edge'
-        ? `${p.data.source} → ${p.data.target}<br/>次数: ${p.data.value}` : p.name },
+      tooltip: { trigger: 'item', formatter: p => {
+        if (p.dataType !== 'edge') return p.name;
+        let s = `${p.data.source} → ${p.data.target}<br/>次数: ${p.data.value}`;
+        if (p.data.reasons) s += `<br/>原因: ${p.data.reasons.split(',').slice(0,3).join(' / ')}`;
+        return s;
+      } },
       series: [{
         type: 'sankey', emphasis: { focus: 'adjacency' },
         nodeAlign: 'left',
@@ -101,6 +117,18 @@ async function loadStateMachine() {
       }]
     });
   } catch (e) { console.error(e); }
+}
+
+// D7: 注入示例工作流 → 让 Sankey 立刻显示真实迁移数据
+async function seedDemo() {
+  await fetch('/analytics/seed', { method: 'POST' });
+  loadStateMachine();
+}
+// D7: 清空真实迁移数据
+async function resetTransitions() {
+  if (!confirm('清空所有真实状态机迁移数据?')) return;
+  await fetch('/analytics/transitions', { method: 'DELETE' });
+  loadStateMachine();
 }
 
 async function loadStatus() {
