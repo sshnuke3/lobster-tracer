@@ -192,12 +192,12 @@ async function loadSessions() {
     if (!sessions.length) { box.innerHTML = '<div class="empty">暂无会话,去 Playground 跑一次</div>'; return; }
     box.innerHTML = '<div class="toolbar"><button onclick="loadSessions()">↻ 刷新会话</button></div>' +
       sessions.map(s => `
-        <div class="sess" onclick="openSession('${s.id}')">
+        <div class="sess" onclick="openSession('${escapeHtml(s.id)}')">
           <div class="row1">
-            <span class="model">${s.model || 'unknown'}</span>
-            <span><span class="dot st-${s.status}"></span>${s.status}</span>
+            <span class="model">${escapeHtml(s.model || 'unknown')}</span>
+            <span><span class="dot st-${escapeHtml(s.status || 'unknown')}"></span>${escapeHtml(s.status || 'unknown')}</span>
           </div>
-          <div class="meta">${(s.phase || '—')} · ${(s.id || '').slice(0,8)} · ${s.started_at?.slice(0,19)?.replace('T',' ') || ''}</div>
+          <div class="meta">${escapeHtml(s.phase || '—')} · ${escapeHtml((s.id || '').slice(0,8))} · ${escapeHtml(s.started_at?.slice(0,19)?.replace('T',' ') || '')}</div>
         </div>`).join('');
   } catch (e) { box.innerHTML = '<div class="empty">加载失败</div>'; }
 }
@@ -253,7 +253,15 @@ function renderLog(chunks) {
     return `#${p.idx} ${c}${r}`;
   }).join('\n') || '(无 chunk 事件)';
 }
-function escapeHtml(s) { return (s||'').replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
+function escapeHtml(s) {
+  // hotfix(D8.1): 全转义所有 HTML 特殊字符(含 " '),防止在属性/事件处理器上下文注入 payload
+  return (s == null ? '' : String(s))
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 loadStateMachine(); loadStatus(); loadSessions(); connectWS();
 </script>

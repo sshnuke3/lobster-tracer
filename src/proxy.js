@@ -49,6 +49,15 @@ export async function handleProxy(req, res) {
   logEvent(sessionId, 'proxy_forward', { model, isStream, base: OPENAI_API_BASE });
 
   // 3. 转发到 OpenAI
+  // hotfix(D8.1): 流式时默认注入 stream_options.include_usage —— 让"真 token 统计"自动生效,
+  //   不覆盖客户端已显式设置的 stream_options(覆盖优先级: 客户端显式 > 服务端默认)
+  const forwardBody = { ...requestBody };
+  if (isStream) {
+    forwardBody.stream_options = {
+      ...(requestBody.stream_options || {}),
+      include_usage: true
+    };
+  }
   let upstreamResponse;
   try {
     upstreamResponse = await request(`${OPENAI_API_BASE}/chat/completions`, {
@@ -58,7 +67,7 @@ export async function handleProxy(req, res) {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Accept': isStream ? 'text/event-stream' : 'application/json'
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(forwardBody)
     });
   } catch (err) {
     logEvent(sessionId, 'error', { phase: 'upstream_request', error: err.message });
