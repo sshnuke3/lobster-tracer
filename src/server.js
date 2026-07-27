@@ -30,6 +30,14 @@ if (process.env.DEMO_MODE === '1' && !hasRealTransitions()) {
 }
 
 // 中间件
+// [D17/v5-4.2] CSP:脚本仅允许本站(ECharts 已本地化到 /vendor),另补基础安全头
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
 app.use(express.json({ limit: '1mb' })); // [AUDIT #9] 10mb→1mb,避免大 body 滥用
 app.use(express.static(path.join(__dirname, '../public')));
 
@@ -49,7 +57,9 @@ function rateLimit({ windowMs = 60000, max = 60 } = {}) {
   const hits = new Map(); // key: ip -> { count, start }
   setInterval(() => hits.clear(), windowMs).unref(); // 窗口滚动清空,不阻塞进程退出
   return (req, res, next) => {
-    const k = (req.headers['x-forwarded-for']?.split(',')[0].trim()) || req.ip || 'unknown';
+    // [D17/R4-02] 直接用 req.ip:trust proxy=1 下 Express 已取可信的最右侧 XFF;
+    // 原手动 split(',')[0] 取最左段 = 攻击者可自带伪造 XFF 绕限流
+    const k = req.ip || 'unknown';
     const now = Date.now();
     const rec = hits.get(k) || { count: 0, start: now };
     if (now - rec.start > windowMs) { rec.count = 0; rec.start = now; }
@@ -68,7 +78,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.9',
+    version: '0.5.10',
     phase: 'D13-manual-and-demo',
     timestamp: new Date().toISOString(),
     db_stats: getStats()

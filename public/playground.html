@@ -253,7 +253,8 @@ async function deleteSession() {
   if (!selectedSessionId) return;
   if (!confirm('确认删除会话 ' + selectedSessionId.slice(0, 8) + '...(级联删除 events)?')) return;
   try {
-    const resp = await fetch(`/sessions/${selectedSessionId}`, { method: 'DELETE' });
+    // [D17/v5-Patch2] DELETE 补鉴权透传:设 ADMIN_TOKEN 的私有部署下不再 401
+    const resp = await fetch(`/sessions/${selectedSessionId}`, authed({ method: 'DELETE' }));
     const data = await resp.json();
     if (data.ok) {
       alert(`✅ 已删除 ${data.deleted.sessionDeleted} session + ${data.deleted.eventsDeleted} events`);
@@ -272,11 +273,12 @@ async function replaySession() {
   if (!selectedSessionId) return;
   if (!confirm('重放这次会话? 会发一次新的 LLM 调用 (用原 prompt + model)')) return;
   try {
-    const resp = await fetch(`/sessions/${selectedSessionId}/replay`, {
+    // [D17/v5-Patch2 修正版] Content-Type 传进 authed() 内部合并,避免后置 headers 覆盖 Authorization
+    const resp = await fetch(`/sessions/${selectedSessionId}/replay`, authed({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stream: false })
-    });
+    }));
     if (resp.ok) {
       const data = await resp.json();
       const newId = resp.headers.get('X-Session-Id') || '(新会话已落库)';

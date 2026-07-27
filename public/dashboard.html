@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🦞 Lobster-Tracer · 可视化调试面板 (D5/D6)</title>
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <!-- [D17/R4-03] ECharts 本地化:评审现场网络不可控,不再依赖 CDN;CSP 亦收紧为 script-src 'self' -->
+  <script src="/vendor/echarts.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {

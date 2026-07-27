@@ -87,10 +87,12 @@ async function main() {
     j = await r.json();
     assert(r.status === 200 && j.ok, 'authorized -> 200');
 
-    console.log('7) GET /sessions');
-    r = await fetch(`${BASE}/sessions?limit=10`);
+    console.log('7) GET /sessions (seed 后应 >=6: 3 基础 demo + 3 长文 Agent)');
+    r = await fetch(`${BASE}/sessions?limit=100`);
     j = await r.json();
     assert(r.ok && Array.isArray(j.sessions), `/sessions -> 200 (count=${j.count})`);
+    // [D17/R4-04] seed 后数据断言:确保 seedDemoData 真的灌了 6 个示例会话,而非仅接口 200
+    assert(j.sessions.length >= 6, `seeded sessions >= 6 (got ${j.sessions.length})`);
 
     console.log('7b) GET /sessions/:id auth gate (no token -> 401, with token -> 404)');
     r = await fetch(`${BASE}/sessions/__nonexistent__`);

@@ -182,7 +182,19 @@ export async function handleProxy(req, res) {
 
   } else {
     // 5. 非流式响应
-    const responseBody = await upstreamResponse.body.text();
+    // [D17/R4-07 修正版] body.text() 在超时 abort 时会 reject:不包 try/catch 会变 unhandled rejection
+    let responseBody;
+    try {
+      responseBody = await upstreamResponse.body.text();
+    } catch (err) {
+      cleanupTimeout();
+      const isAbort = err.name === 'AbortError' || /abort/i.test(err.message || '');
+      const msg = isAbort ? 'stream timeout' : err.message;
+      logEvent(sessionId, 'error', { phase: 'nonstream_body', error: msg });
+      failSession({ sessionId, error: msg });
+      console.error('[proxy] nonstream body read failed:', msg);
+      return res.status(isAbort ? 504 : 502).json({ error: isAbort ? 'upstream request timeout' : 'upstream body read failed' });
+    }
     cleanupTimeout();
     let parsed;
     try { parsed = JSON.parse(responseBody); } catch (e) { parsed = { raw: responseBody }; }
