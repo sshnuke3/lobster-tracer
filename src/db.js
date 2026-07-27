@@ -192,3 +192,87 @@ export function hasRealTransitions() {
 export function clearTransitions() {
   db.prepare('DELETE FROM transitions').run();
 }
+
+// D10: 多会话聚合分析(Fleet 可观测性)
+// 跨全部会话汇总 token / 失败率 / 各模型消耗 / 状态机自环(长任务卡死信号) / Top 会话排行
+// 全部参数化查询,无拼接 SQL
+export function getAggregateStats() {
+  const base = db.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      COALESCE(SUM(prompt_tokens), 0) AS total_prompt,
+      COALESCE(SUM(completion_tokens), 0) AS total_completion,
+      COALESCE(SUM(duration_ms), 0) AS total_duration_ms,
+      COALESCE(AVG(prompt_tokens), 0) AS avg_prompt,
+      COALESCE(AVG(completion_tokens), 0) AS avg_completion,
+      COALESCE(AVG(duration_ms), 0) AS avg_duration_ms,
+      SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+      SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
+      SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) AS running
+    FROM sessions
+  `).get();
+
+  const byModel = db.prepare(`
+    SELECT model,
+           COUNT(*) AS n,
+           COALESCE(SUM(prompt_tokens), 0) AS prompt,
+           COALESCE(SUM(completion_tokens), 0) AS completion,
+           COALESCE(SUM(duration_ms), 0) AS duration_ms
+    FROM sessions
+    WHERE model IS NOT NULL AND model <> ''
+    GROUP BY model
+    ORDER BY n DESC
+    LIMIT 12
+  `).all();
+
+  const byProject = db.prepare(`
+    SELECT project, COUNT(*) AS n
+    FROM sessions
+    GROUP BY project
+    ORDER BY n DESC
+    LIMIT 12
+  `).all();
+
+  // 状态机自环:from_phase == to_phase 即"卡在同一阶段反复横跳"(长文任务典型卡死特征)
+  const transitions = db.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN from_phase = to_phase THEN 1 ELSE 0 END) AS self_loops
+    FROM transitions
+  `).get();
+
+  const selfLoopByPhase = db.prepare(`
+    SELECT from_phase AS phase, COUNT(*) AS n
+    FROM transitions
+    WHERE from_phase = to_phase
+    GROUP BY from_phase
+    ORDER BY n DESC
+    LIMIT 12
+  `).all();
+
+  const topSessions = db.prepare(`
+    SELECT substr(id, 1, 8) AS id8, model, phase, status,
+           (prompt_tokens + completion_tokens) AS total_tokens,
+           (duration_ms / 1000.0) AS duration_s
+    FROM sessions
+    ORDER BY total_tokens DESC
+    LIMIT 8
+  `).all();
+
+  const selfLoopRate = transitions.total
+    ? (transitions.self_loops / transitions.total)
+    : 0;
+
+  return {
+    base,
+    byModel,
+    byProject,
+    transitions: {
+      total: transitions.total || 0,
+      self_loops: transitions.self_loops || 0,
+      self_loop_rate: selfLoopRate
+    },
+    selfLoopByPhase,
+    topSessions
+  };
+}

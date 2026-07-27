@@ -23,6 +23,12 @@
     .panel h2 { font-size: 15px; margin-bottom: 10px; color: #2A2A2A; }
     .chart { width: 100%; height: 320px; }
     .mid { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
+    .agg { margin-bottom: 16px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 6px 0 14px; }
+    .kpi { background: rgba(255,255,255,0.6); border-radius: 10px; padding: 12px; text-align: center; }
+    .kpi .k { font-size: 11px; color: #999; letter-spacing: 1px; }
+    .kpi .v { font-size: 20px; font-weight: 800; color: #FF8B94; margin-top: 4px; }
+    .agg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .sess-list { max-height: 520px; overflow-y: auto; }
     .sess { padding: 10px 12px; border-radius: 8px; margin-bottom: 8px; cursor: pointer;
             background: rgba(255,255,255,0.6); border: 1px solid transparent; transition: .15s; }
@@ -83,6 +89,19 @@
     </div>
   </div>
 
+  <div class="agg">
+    <div class="panel">
+      <h2>📊 多会话聚合 <span class="badge reference">Fleet 可观测性</span></h2>
+      <div class="toolbar"><button class="ghost" onclick="loadAggregate()">↻ 刷新聚合</button></div>
+      <div class="kpis" id="aggKpis"><div class="empty">加载中…</div></div>
+      <div class="agg-grid">
+        <div class="panel"><h2>各模型 token 消耗 (prompt/completion)</h2><div id="modelChart" class="chart" style="height:300px"></div></div>
+        <div class="panel"><h2>各 phase 自环次数 <span style="font-size:11px;color:#E57373">(长任务卡死信号)</span></h2><div id="loopChart" class="chart" style="height:300px"></div></div>
+      </div>
+      <div class="panel" style="margin-top:16px"><h2>Top 会话 token 排行</h2><div id="topChart" class="chart" style="height:280px"></div></div>
+    </div>
+  </div>
+
   <div class="mid">
     <div class="panel sess-list" id="sessList">
       <div class="toolbar"><button onclick="loadSessions()">↻ 刷新会话</button></div>
@@ -96,7 +115,10 @@
 <script>
 const sankey = echarts.init(document.getElementById('sankey'));
 const statusPie = echarts.init(document.getElementById('statusPie'));
-window.addEventListener('resize', () => { sankey.resize(); statusPie.resize(); });
+const modelChart = echarts.init(document.getElementById('modelChart'));
+const loopChart = echarts.init(document.getElementById('loopChart'));
+const topChart = echarts.init(document.getElementById('topChart'));
+window.addEventListener('resize', () => { sankey.resize(); statusPie.resize(); modelChart.resize(); loopChart.resize(); topChart.resize(); });
 
 // D8: WebSocket 实时推送 —— 落库即推,面板无需轮询
 let currentSessionId = null;
@@ -266,7 +288,63 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
-loadStateMachine(); loadStatus(); loadSessions(); connectWS();
+// D10: 多会话聚合面板(Fleet 可观测性)
+async function loadAggregate() {
+  try {
+    const a = await (await fetch('/analytics/aggregate')).json();
+    const b = a.base || {};
+    const total = b.total || 0;
+    const failRate = total ? ((b.failed || 0) / total * 100).toFixed(1) : '0.0';
+    const totalTok = (b.total_prompt || 0) + (b.total_completion || 0);
+    const avgDur = ((b.avg_duration_ms || 0) / 1000).toFixed(1);
+
+    document.getElementById('aggKpis').innerHTML = total
+      ? `<div class="kpi"><div class="k">总会话</div><div class="v">${total}</div></div>
+         <div class="kpi"><div class="k">失败率</div><div class="v">${failRate}%</div></div>
+         <div class="kpi"><div class="k">总 token</div><div class="v">${totalTok}</div></div>
+         <div class="kpi"><div class="k">平均耗时</div><div class="v">${avgDur}s</div></div>`
+      : '<div class="empty">暂无会话,去 Playground 跑一次</div>';
+
+    // 各模型 token 消耗(堆叠)
+    const models = a.byModel || [];
+    modelChart.setOption({
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend: { data: ['prompt', 'completion'], top: 0 },
+      grid: { left: 56, right: 16, top: 30, bottom: 70 },
+      xAxis: { type: 'category', data: models.map(m => m.model), axisLabel: { rotate: 30, fontSize: 10 } },
+      yAxis: { type: 'value', name: 'token' },
+      series: [
+        { name: 'prompt', type: 'bar', stack: 't', data: models.map(m => m.prompt), itemStyle: { color: '#FFB74D' } },
+        { name: 'completion', type: 'bar', stack: 't', data: models.map(m => m.completion), itemStyle: { color: '#4CAF93' } }
+      ]
+    });
+
+    // 各 phase 自环次数(长任务卡死信号)
+    const loops = a.selfLoopByPhase || [];
+    loopChart.setOption({
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: p => `${escapeHtml(p[0].name)}<br/>自环次数: ${p[0].value}` },
+      grid: { left: 48, right: 16, top: 20, bottom: 70 },
+      xAxis: { type: 'category', data: loops.map(l => l.phase), axisLabel: { rotate: 30, fontSize: 10 } },
+      yAxis: { type: 'value', name: '自环' },
+      series: [{ type: 'bar', data: loops.map(l => l.n), itemStyle: { color: '#E57373' } }]
+    });
+
+    // Top 会话 token 排行(横向)
+    const top = a.topSessions || [];
+    topChart.setOption({
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: p => {
+        const t = top[p[0].dataIndex];
+        return `#${escapeHtml(t.id8)} · ${escapeHtml(t.model || '?')}<br/>${escapeHtml(t.phase || '-')} · ${escapeHtml(t.status)}<br/>token: ${t.total_tokens} · ${t.duration_s}s`;
+      } },
+      grid: { left: 60, right: 16, top: 20, bottom: 30 },
+      xAxis: { type: 'value', name: 'token' },
+      yAxis: { type: 'category', data: top.map(t => '#' + t.id8).reverse(), inverse: true },
+      series: [{ type: 'bar', data: top.map(t => t.total_tokens).reverse(), itemStyle: { color: '#FF8B94' } }]
+    });
+  } catch (e) { console.error(e); }
+}
+
+loadStateMachine(); loadStatus(); loadSessions(); loadAggregate(); connectWS();
 </script>
 </body>
 </html>

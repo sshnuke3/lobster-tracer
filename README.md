@@ -52,6 +52,7 @@ D9 起所有写接口、`/proxy` 与 WebSocket 均已带鉴权,但**默认不强
 | GET | `/sessions` | 列出所有会话 |
 | GET | `/sessions/:id` | 单会话详情 + events 流 |
 | GET | `/analytics/statemachine` | 状态机定义(Sankey 数据源;有真实迁移数据时返回聚合路径,否则回退参考状态机) |
+| GET | `/analytics/aggregate` | 多会话聚合分析(token 汇总 / 各模型消耗 / 状态机自环卡死信号 / Top 会话排行),Fleet 可观测性(D10) |
 | POST | `/analytics/transition` | 上报一次 phase 迁移 `{"from","to","reason?","sessionId?"}`(上游长文工作流的集成点) |
 | POST | `/analytics/seed` | 注入一条示例 xiaoshuo-cli 工作流(含 self-loop + error 恢复),demo 用 |
 | DELETE | `/analytics/transitions` | 清空真实迁移数据(demo 重置) |
@@ -73,7 +74,7 @@ D9 起所有写接口、`/proxy` 与 WebSocket 均已带鉴权,但**默认不强
 | **D7** | **8.1** | **真实状态机迁移落库(transitions 表 + 聚合接口 + Sankey 切真实数据 + 示例注入)** | ✅ |
 | **D8** | **8.2** | **WebSocket 实时推送(落库即广播,面板免轮询即时刷新 + 实时指示灯)** | ✅ |
 | **D9** | **8.2** | **安全加固:合并多份审计修复(鉴权/限流/XSS 全转义/WS token+心跳/错误脱敏,剔除通配 CORS)** | ✅ |
-| D10 | 8.3 | 多会话聚合分析(跨会话 token/phase/异常率统计,Fleet 可观测性) | ⏳ |
+| **D10** | **8.3** | **多会话聚合分析(跨会话 token 汇总 / 各模型消耗 / 状态机自环卡死信号 / Top 会话排行,Fleet 可观测性)** | ✅ |
 | D11 | 8.4 | 收尾工程:LICENSE 文件 + 最小冒烟测试(修审计 #18 零测试) | ⏳ |
 | D12 | 8.5 | 一键导出诊断报告(Markdown / 小红书图文,对齐产品定位) | ⏳ |
 | D13-14 | 8.6-7 | 录 2-3min demo + 写 Qoder 赛道 pitch | ⏳ |
@@ -98,5 +99,5 @@ MIT
 ---
 
 *更新时间: 2026-07-27*  
-*版本 v0.5.2*  
+*版本 v0.5.3*  
 *部署平台: Railway*

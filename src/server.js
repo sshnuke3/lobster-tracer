@@ -5,7 +5,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { initDB, listSessions, getSession, getStats, deleteSession, insertSession, insertEvent, insertTransition, getTransitionAggregate, hasRealTransitions, clearTransitions } from './db.js';
+import { initDB, listSessions, getSession, getStats, deleteSession, insertSession, insertEvent, insertTransition, getTransitionAggregate, hasRealTransitions, clearTransitions, getAggregateStats } from './db.js';
 import { handleProxy } from './proxy.js';
 import { setupWS } from './realtime.js';
 
@@ -56,7 +56,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.2',
+    version: '0.5.3',
     phase: 'D8-realtime-ws',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
@@ -116,6 +116,16 @@ app.get('/analytics/statemachine', (req, res) => {
   }
 });
 
+// D10: 多会话聚合分析(Fleet 可观测性)—— 只读,与 /health 同级公开
+app.get('/analytics/aggregate', (req, res) => {
+  try {
+    res.json(getAggregateStats());
+  } catch (e) {
+    console.error('[aggregate]', e.message);
+    res.status(500).json({ error: 'internal server error' });
+  }
+});
+
 // D7: 记录一次状态机迁移(上游长文工作流/多 Agent 系统的集成点)
 // 请求体: { from, to, reason?, sessionId? }  —— xiaoshuo-cli 每次 phase 变更调用一次
 // [AUDIT #4] 白名单校验 from/to:防止注入任意状态名污染 Sankey、撑爆 phases 集合
@@ -147,6 +157,7 @@ app.post('/analytics/seed', requireToken, (req, res) => {
     ['verify', 'continue', 'quality gap → redo'],
     ['continue', 'chapter_gen', 'regenerate (loop)'],
     ['chapter_gen', 'error', 'upstream timeout'],
+    ['chapter_gen', 'chapter_gen', 'stuck: regenerating same chapter (self-loop)'],
     ['error', 'chapter_gen', 'retry after error'],
     ['chapter_gen', 'continue', 'retry ok'],
     ['continue', 'verify', 're-verify'],

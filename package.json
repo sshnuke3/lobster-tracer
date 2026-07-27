@@ -1,6 +1,6 @@
 {
   "name": "lobster-tracer",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "AI 长文工作流可视化调试器 - 像浏览器 DevTools 看网络请求一样,看 AI 的 prompt / token 流 / 状态机迁移",
   "type": "module",
   "main": "src/server.js",
