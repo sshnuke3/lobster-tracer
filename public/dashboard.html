@@ -233,7 +233,7 @@ async function loadSessions() {
 
 async function openSession(id) {
   document.querySelectorAll('.sess').forEach(el => el.classList.remove('active'));
-  event.currentTarget.classList.add('active');
+  this.classList.add('active');
   currentSessionId = id; // D8: 标记当前会话,WS 实时追加只针对它
   const detail = document.getElementById('detail');
   detail.innerHTML = '<div class="empty">加载中…</div>';
@@ -271,7 +271,7 @@ async function openSession(id) {
         { name: 'reasoning', type: 'line', showSymbol: false, data: yR, lineStyle: { color: '#FFB74D' }, itemStyle: { color: '#FFB74D' } }
       ]
     });
-  } catch (e) { detail.innerHTML = '<div class="empty">加载失败: ' + e.message + '</div>'; }
+  } catch (e) { detail.innerHTML = '<div class="empty">加载失败</div>'; }
 }
 
 function renderLog(chunks) {

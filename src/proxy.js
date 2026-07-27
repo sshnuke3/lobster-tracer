@@ -23,6 +23,13 @@ export async function handleProxy(req, res) {
   const isStream = !!requestBody?.stream;
   const reqPhase = requestBody?.metadata?.phase || null;
 
+  // [D14/R3-03] 全局流式超时:防止慢速 / 挂死上游卡住 session、泄漏连接
+  //   流式响应可能很久不结束,若不设上限会一直占用资源;超时即中止并标记失败
+  const STREAM_TIMEOUT_MS = Number(process.env.STREAM_TIMEOUT_MS) || 300000; // 默认 5 分钟
+  const controller = new AbortController();
+  const streamTimeout = setTimeout(() => controller.abort(), STREAM_TIMEOUT_MS);
+  const cleanupTimeout = () => clearTimeout(streamTimeout);
+
   // 1. 启动 session(完整存 prompt,不再 slice(0,500) 截断)
   const { id: sessionId } = insertSession({
     project: requestBody.metadata?.project || 'lobster-tracer',
@@ -35,13 +42,14 @@ export async function handleProxy(req, res) {
   // D7: 首个真实迁移 —— 请求携带 phase 时记录 init → phase(即使 playground 也能生成真实边)
   if (reqPhase) {
     try { insertTransition({ sessionId, from: 'init', to: reqPhase, reason: 'session_start' }); }
-    catch (_) { /* swallow */ }
+    catch (e) { console.error('[proxy] insertTransition failed:', e.message); }
   }
 
   const startTime = Date.now();
 
   // 2. 失败兜底
   if (!OPENAI_API_KEY) {
+    cleanupTimeout();
     logEvent(sessionId, 'error', { reason: 'OPENAI_API_KEY missing' });
     failSession({ sessionId, error: 'OPENAI_API_KEY missing' });
     console.error('[proxy] OPENAI_API_KEY missing');
@@ -69,14 +77,23 @@ export async function handleProxy(req, res) {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Accept': isStream ? 'text/event-stream' : 'application/json'
       },
-      body: JSON.stringify(forwardBody)
+      body: JSON.stringify(forwardBody),
+      signal: controller.signal // [D14/R3-03] 透传中止信号,超时即中断等待
     });
   } catch (err) {
+    cleanupTimeout();
+    if (err.name === 'AbortError') {
+      logEvent(sessionId, 'error', { phase: 'upstream_request', error: 'stream timeout' });
+      failSession({ sessionId, error: 'stream timeout' });
+      console.error('[proxy] upstream request timeout', sessionId);
+      return res.status(504).json({ error: 'upstream request timeout' });
+    }
     logEvent(sessionId, 'error', { phase: 'upstream_request', error: err.message });
     failSession({ sessionId, error: err.message });
     console.error('[proxy] upstream request failed:', err.message);
     return res.status(502).json({ error: 'upstream request failed' }); // [AUDIT #3] 不泄露上游网络细节
   }
+  // request 阶段成功;流式响应仍可能挂起,下面流式 / 非流分支在各自终态清理 streamTimeout
 
   // 4. 流式响应 - 抓每个 chunk
   if (isStream) {
@@ -87,7 +104,7 @@ export async function handleProxy(req, res) {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Session-Id', sessionId);
     // [AUDIT #2] 客户端断开时销毁上游流,防止 TCP 连接泄漏(长会话下耗尽连接池)
-    res.on('close', () => { try { upstreamResponse.body.destroy(); } catch (_) { /* already closed */ } });
+    res.on('close', () => { try { upstreamResponse.body.destroy(); } catch (_) { /* already closed */ } cleanupTimeout(); });
 
     let fullResponse = '';
     let chunkCount = 0;
@@ -153,17 +170,20 @@ export async function handleProxy(req, res) {
         durationMs
       });
       res.end();
+      cleanupTimeout();
     });
 
     upstreamResponse.body.on('error', (err) => {
       logEvent(sessionId, 'error', { phase: 'streaming', error: err.message });
       failSession({ sessionId, error: err.message });
       res.end();
+      cleanupTimeout();
     });
 
   } else {
     // 5. 非流式响应
     const responseBody = await upstreamResponse.body.text();
+    cleanupTimeout();
     let parsed;
     try { parsed = JSON.parse(responseBody); } catch (e) { parsed = { raw: responseBody }; }
     const durationMs = Date.now() - startTime;

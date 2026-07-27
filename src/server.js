@@ -64,8 +64,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.6',
-    phase: 'D8-realtime-ws',
+    version: '0.5.7',
+    phase: 'D13-manual-and-demo',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
   });
@@ -104,7 +104,8 @@ const PHASE_MACHINE = {
     { from: 'continue', to: 'chapter_gen', value: 1 },       // 续写循环
     { from: 'verify', to: 'done', value: 7 },
     { from: 'verify', to: 'continue', value: 1 },
-    { from: 'error', to: 'chapter_gen', value: 1 }           // 异常恢复
+    { from: 'error', to: 'chapter_gen', value: 1 },          // 异常恢复
+    { from: 'chapter_gen', to: 'chapter_gen', value: 2 }      // 卡死自环(demo seed 体现, R3-04 对齐)
   ]
 };
 
