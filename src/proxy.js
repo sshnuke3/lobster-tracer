@@ -13,7 +13,8 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 
 // 安全写日志:任何 DB 异常都不应中断对流式响应的转发(日志是副产物,响应才是主链路)
 function logEvent(sessionId, eventType, payload) {
-  try { insertEvent({ sessionId, eventType, payload }); } catch (_) { /* swallow */ }
+  try { insertEvent({ sessionId, eventType, payload }); }
+  catch (e) { console.error('[proxy] logEvent failed:', e.message); }
 }
 
 export async function handleProxy(req, res) {

@@ -91,6 +91,12 @@ async function main() {
     j = await r.json();
     assert(r.ok && Array.isArray(j.sessions), `/sessions -> 200 (count=${j.count})`);
 
+    console.log('7b) GET /sessions/:id auth gate (no token -> 401, with token -> 404)');
+    r = await fetch(`${BASE}/sessions/__nonexistent__`);
+    assert(r.status === 401, `session detail without token -> 401 (got ${r.status})`);
+    r = await fetch(`${BASE}/sessions/__nonexistent__`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    assert(r.status === 404, `session detail with token -> 404 not-found (got ${r.status})`);
+
     console.log('8) POST /analytics/transition WITH token -> 200');
     r = await fetch(`${BASE}/analytics/transition`, {
       method: 'POST',

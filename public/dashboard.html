@@ -123,10 +123,14 @@ window.addEventListener('resize', () => { sankey.resize(); statusPie.resize(); m
 // D8: WebSocket 实时推送 —— 落库即推,面板无需轮询
 let currentSessionId = null;
 let ws, liveTimer;
+// [AUDIT #2/P0] 从 URL ?token= 取鉴权 token(启用 ADMIN_TOKEN 后,REST 与 WS 共用同一 token)
+const _wt = new URLSearchParams(location.search).get('token');
+function authed(opts = {}) {
+  if (_wt) opts.headers = { ...(opts.headers || {}), 'Authorization': 'Bearer ' + _wt };
+  return opts;
+}
 function connectWS() {
   const live = document.getElementById('liveWrap');
-  // [AUDIT #2/P0] 若 URL 带 ?token= 则转发到 WS(启用 ADMIN_TOKEN 后前端鉴权)
-  const _wt = new URLSearchParams(location.search).get('token');
   const _wsUrl = `ws://${location.host}${_wt ? `?token=${encodeURIComponent(_wt)}` : ''}`;
   try { ws = new WebSocket(_wsUrl); } catch { return; }
   ws.onopen = () => { live.className = 'live on'; document.getElementById('liveText').textContent = '实时'; };
@@ -181,13 +185,13 @@ async function loadStateMachine() {
 
 // D7: 注入示例工作流 → 让 Sankey 立刻显示真实迁移数据
 async function seedDemo() {
-  await fetch('/analytics/seed', { method: 'POST' });
+  await fetch('/analytics/seed', authed({ method: 'POST' }));
   loadStateMachine();
 }
 // D7: 清空真实迁移数据
 async function resetTransitions() {
   if (!confirm('清空所有真实状态机迁移数据?')) return;
-  await fetch('/analytics/transitions', { method: 'DELETE' });
+  await fetch('/analytics/transitions', authed({ method: 'DELETE' }));
   loadStateMachine();
 }
 
@@ -234,7 +238,7 @@ async function openSession(id) {
   const detail = document.getElementById('detail');
   detail.innerHTML = '<div class="empty">加载中…</div>';
   try {
-    const { session, events } = await (await fetch('/sessions/' + id)).json();
+    const { session, events } = await (await fetch('/sessions/' + id, authed())).json();
     const chunks = events.filter(e => e.event_type === 'chunk' && e.payload);
     // 累计 content / reasoning 字符流(代理 token 流)
     let cC = 0, cR = 0; const xs = [], yC = [], yR = [];

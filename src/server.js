@@ -56,7 +56,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.4',
+    version: '0.5.5',
     phase: 'D8-realtime-ws',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
@@ -74,7 +74,7 @@ app.get('/sessions', (req, res) => {
 });
 
 // /sessions/:id 详情
-app.get('/sessions/:id', (req, res) => {
+app.get('/sessions/:id', requireToken, (req, res) => {
   const result = getSession(req.params.id);
   if (!result) return res.status(404).json({ error: 'session not found' });
   res.json(result);

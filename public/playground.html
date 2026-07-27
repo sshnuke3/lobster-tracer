@@ -181,6 +181,13 @@ let selectedSessionId = null;
 let sessionOffset = 0;
 const PAGE_SIZE = 20;
 
+// [AUDIT #2/P0] 从 URL ?token= 取鉴权 token(启用 ADMIN_TOKEN 后,REST 调用共用)
+const _wt = new URLSearchParams(location.search).get('token');
+function authed(opts = {}) {
+  if (_wt) opts.headers = { ...(opts.headers || {}), 'Authorization': 'Bearer ' + _wt };
+  return opts;
+}
+
 // [AUDIT #5] 全转义 HTML 特殊字符(与 dashboard.html 对齐):原仅转义 <,漏 " ' & >
 function escapeHtml(s) {
   return (s == null ? '' : String(s))
@@ -302,7 +309,7 @@ async function refreshSessions() {
     currentSessions = data.sessions || [];
     renderSessionList();
   } catch (err) {
-    list.innerHTML = `<div class="empty">❌ 加载失败: ${err.message}</div>`;
+    list.innerHTML = `<div class="empty">❌ 加载失败</div>`;
   }
 }
 
@@ -343,11 +350,11 @@ async function loadSessionDetail(sessionId) {
   detail.innerHTML = '<div class="empty">⏳ 加载中...</div>';
 
   try {
-    const resp = await fetch(`/sessions/${sessionId}`);
+    const resp = await fetch(`/sessions/${sessionId}`, authed());
     const data = await resp.json();
     renderSessionDetail(data);
   } catch (err) {
-    detail.innerHTML = `<div class="empty">❌ 加载失败: ${err.message}</div>`;
+    detail.innerHTML = `<div class="empty">❌ 加载失败</div>`;
   }
 }
 
