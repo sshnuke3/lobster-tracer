@@ -15,6 +15,10 @@ const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../data/lobster-tra
 
 const app = express();
 
+// [D15/中危-2] Railway 等反代后部署:启用 trust proxy,让 req.ip 反映真实客户端 IP,
+// 限流按客户端区分(否则所有请求塌成反代内网 IP,限流退化成单一全局桶;且可防 XFF 伪造)
+app.set('trust proxy', 1);
+
 initDB(DB_PATH);
 
 // [D12.5] demo 自动 seed:DEMO_MODE=1 且当前无真实迁移数据时,启动即灌示例数据
@@ -64,7 +68,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.7',
+    version: '0.5.8',
     phase: 'D13-manual-and-demo',
     timestamp: new Date().toISOString(),
     db_stats: getStats()

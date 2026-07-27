@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { rmSync } from 'node:fs';
+import WebSocket from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -104,6 +105,33 @@ async function main() {
       body: JSON.stringify({ from: 'init', to: 'outline', reason: 'smoke' }),
     });
     assert(r.status === 200, `transition -> 200 (got ${r.status})`);
+
+    // [D15/中危-1] WebSocket 鉴权端到端:无 token/错 token -> close 1008;正确 token -> connected 握手帧
+    const wsUrl = (tok) => `ws://localhost:${PORT}${tok === undefined ? '' : `?token=${encodeURIComponent(tok)}`}`;
+    const waitClose = (ws) => new Promise((res) => {
+      ws.on('close', (code) => res(code));
+      ws.on('error', () => {});
+      setTimeout(() => res('timeout'), 3000);
+    });
+    const waitMsg = (ws) => new Promise((res) => {
+      ws.on('message', (d) => { try { res(JSON.parse(d.toString())); } catch { res(d.toString()); } });
+      ws.on('error', () => {});
+      setTimeout(() => res('timeout'), 3000);
+    });
+
+    console.log('9) WS connect WITHOUT token -> close 1008');
+    let c9 = await waitClose(new WebSocket(wsUrl()));
+    assert(c9 === 1008, `WS no token -> 1008 (got ${c9})`);
+
+    console.log('10) WS connect WITH correct token -> {type:"connected"}');
+    let w10 = new WebSocket(wsUrl(TOKEN));
+    let m10 = await waitMsg(w10);
+    assert(m10 && m10.type === 'connected', `WS token -> connected (got ${JSON.stringify(m10)})`);
+    w10.close();
+
+    console.log('11) WS connect WITH wrong token -> close 1008');
+    let c11 = await waitClose(new WebSocket(wsUrl('wrong-token')));
+    assert(c11 === 1008, `WS wrong token -> 1008 (got ${c11})`);
 
     console.log('\n✅ ALL SMOKE TESTS PASSED');
   } catch (e) {
