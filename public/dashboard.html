@@ -61,9 +61,24 @@
     .live-dot { width: 9px; height: 9px; border-radius: 50%; background: #ccc; transition: .2s; }
     .live.on .live-dot { background: #4CAF93; box-shadow: 0 0 8px #4CAF93; }
     .live.pulse .live-dot { background: #FF8B94; box-shadow: 0 0 8px #FF8B94; }
+    @keyframes coldStartPulse { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+    .flow-timeline { max-height: 220px; overflow-y: auto; font-size: 12px; background: rgba(255,255,255,0.5); border-radius: 8px; padding: 10px; }
+    .flow-step { padding: 3px 0; border-bottom: 1px dashed rgba(0,0,0,0.06); }
+    .flow-step .phase { font-weight: 700; color: #FF8B94; }
+    .agent-badge { display:inline-block; background:#4CAF93; color:#fff; font-size:10px; padding:1px 7px; border-radius:8px; margin-left:6px; }
+    .model-badge { display:inline-block; background:#FFB74D; color:#fff; font-size:10px; padding:1px 7px; border-radius:8px; margin-left:4px; }
   </style>
 </head>
 <body>
+  <!-- D16: 冷启动加载遮罩(免费 Railway 实例首次访问需 30-60s 唤醒) -->
+  <div id="coldStartOverlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#FFF8F2;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:#FF8B94;">
+    <div style="font-size:48px;">🦞</div>
+    <div style="margin-top:16px;font-size:18px;font-weight:700;">Lobster-Tracer 唤醒中…</div>
+    <div style="margin-top:8px;font-size:14px;opacity:0.7;">首次访问需 30-60s 冷启动（免费实例）</div>
+    <div style="margin-top:24px;width:200px;height:4px;background:rgba(0,0,0,0.08);border-radius:2px;overflow:hidden;">
+      <div style="width:40%;height:100%;background:#FF8B94;border-radius:2px;animation:coldStartPulse 1.2s ease-in-out infinite;"></div>
+    </div>
+  </div>
   <div class="header">
     <h1>🦞 Lobster-Tracer · 可视化调试面板</h1>
     <div class="nav">
@@ -223,11 +238,12 @@ async function loadSessions() {
       sessions.map(s => `
         <div class="sess" onclick="openSession('${escapeHtml(s.id)}', this)">
           <div class="row1">
-            <span class="model">${escapeHtml(s.model || 'unknown')}</span>
+            <span class="model">${escapeHtml(s.project || s.model || 'unknown')}</span>
             <span><span class="dot st-${escapeHtml(s.status || 'unknown')}"></span>${escapeHtml(s.status || 'unknown')}</span>
           </div>
-          <div class="meta">${escapeHtml(s.phase || '—')} · ${escapeHtml((s.id || '').slice(0,8))} · ${escapeHtml(s.started_at?.slice(0,19)?.replace('T',' ') || '')}</div>
+          <div class="meta">${escapeHtml(s.phase || '—')} · ${escapeHtml((s.id || '').slice(0,8))}</div>
         </div>`).join('');
+    box.setAttribute('data-loaded', 'sessions'); // D16: 通知冷启动遮罩可隐藏
   } catch (e) { box.innerHTML = '<div class="empty">加载失败</div>'; }
 }
 
@@ -240,6 +256,7 @@ async function openSession(id, el) {
   try {
     const { session, events } = await (await fetch('/sessions/' + id, authed())).json();
     const chunks = events.filter(e => e.event_type === 'chunk' && e.payload);
+    const transitions = events.filter(e => e.event_type === 'state_transition' && e.payload);
     // 累计 content / reasoning 字符流(代理 token 流)
     let cC = 0, cR = 0; const xs = [], yC = [], yR = [];
     chunks.forEach(e => {
@@ -255,7 +272,9 @@ async function openSession(id, el) {
         <div class="mg"><div class="k">COMPLETION TOK</div><div class="v">${session.completion_tokens || 0}</div></div>
         <div class="mg"><div class="k">DURATION</div><div class="v">${((session.duration_ms||0)/1000).toFixed(1)}s</div></div>
       </div>
-      <h2>字符流时间线 (content vs reasoning)</h2>
+      <h2 style="margin-top:12px">阶段迁移时间线 (${transitions.length})</h2>
+      <div class="flow-timeline">${renderFlow(transitions)}</div>
+      <h2 style="margin-top:12px">字符流时间线 (content vs reasoning)</h2>
       <div id="flow" class="chart" style="height:240px"></div>
       <h2 style="margin-top:12px">Chunk 事件日志 (${chunks.length})</h2>
       <div class="log">${renderLog(chunks)}</div>`;
@@ -281,6 +300,16 @@ function renderLog(chunks) {
     const r = p.reasoning_delta ? `<span class="reason">[R] ${escapeHtml(p.reasoning_delta)}</span>` : '';
     return `#${p.idx} ${c}${r}`;
   }).join('\n') || '(无 chunk 事件)';
+}
+// D16: 渲染每 session 的阶段迁移时间线(含多 Agent 的 agent/model 徽标)
+function renderFlow(transitions) {
+  if (!transitions.length) return '(无阶段迁移事件)';
+  return transitions.map(e => {
+    const p = e.payload || {};
+    const agent = p.agent ? `<span class="agent-badge">${escapeHtml(p.agent)}</span>` : '';
+    const mdl = p.model ? `<span class="model-badge">${escapeHtml(p.model)}</span>` : '';
+    return `<div class="flow-step"><span class="phase">${escapeHtml(p.from || '?')}</span> → <span class="phase">${escapeHtml(p.to || '?')}</span>${agent}${mdl} <span class="reason">${escapeHtml(p.reason || '')}</span></div>`;
+  }).join('');
 }
 function escapeHtml(s) {
   // hotfix(D8.1): 全转义所有 HTML 特殊字符(含 " '),防止在属性/事件处理器上下文注入 payload
@@ -349,6 +378,16 @@ async function loadAggregate() {
 }
 
 loadStateMachine(); loadStatus(); loadSessions(); loadAggregate(); connectWS();
+</script>
+<script>
+  // D16: 冷启动遮罩 —— 会话列表加载完成([data-loaded="sessions"])即淡出;60s 兜底强制移除
+  (function () {
+    var overlay = document.getElementById('coldStartOverlay');
+    if (!overlay) return;
+    function hide() { overlay.style.transition = 'opacity 0.4s'; overlay.style.opacity = '0'; setTimeout(function () { overlay.remove(); }, 400); }
+    var t = setInterval(function () { if (document.querySelector('[data-loaded="sessions"]')) { clearInterval(t); hide(); } }, 400);
+    setTimeout(function () { clearInterval(t); hide(); }, 60000);
+  })();
 </script>
 </body>
 </html>

@@ -12,6 +12,20 @@
 - 异常检测(断流/超时/重复/JSON 解析失败)
 - 一键导出诊断报告（Markdown / 小红书图文）— _规划中,见路线图_
 
+## 🦞 评审引导（Hackathon · Qoder 赛道）
+
+如果你只有 5 分钟，看这 3 个 session 就够了（打开 [公网实例](https://lobster-tracer-production.up.railway.app) → 左侧会话列表选其一 → 右侧看「阶段迁移时间线」+「字符流时间线」，下方全局 Sankey 展示完整状态机与自环卡死信号）：
+
+1. **「长文Agent·成功路径回放」** — 端到端目标闭环：`init → outline → chapter_gen ×3 → verify → done`
+2. **「长文Agent·失败+自环回放」** — 自环检测：大纲被用户打回 3 次，状态机里画出明显回环
+3. **「长文Agent·多Agent协作回放」** — 3 个 Agent（`outline_agent` / `chapter_gen_agent` / `verify_agent`）协作，每个 phase 标注所用模型
+
+**核心卖点（命中 Qoder 赛道能力）**：
+- 🧠 **Multi-Agent Collaboration** — 多 Agent 协作长任务，每个 phase 标注负责 Agent 与模型
+- 🎯 **Goal-Oriented Loop** — plan → execute → verify → iterate 完整闭环 + 自环卡死检测
+- 💾 **Memory & Rules** — 每次 LLM 调用全量落库 + WebSocket 实时广播（Agent 记忆持久化）
+- 👁️ **Comprehensive Context** — `/sessions/:id` 完整上下文（prompt / response / 阶段迁移 / Agent 元数据）
+
 ## 🚀 公网链接
 
 https://lobster-tracer-production.up.railway.app
@@ -88,7 +102,8 @@ npm test   # 运行 test/smoke.mjs —— 子进程起服务,自动校验 /healt
 | D12 | 8.5 | 残余安全加固(v3 审计报告):XSS + proxy 日志 + /sessions/:id 鉴权 | ✅ |
 | D12.5 | 8.5 | demo 自动 seed + 单一公开实例(DEMO_MODE,满足赛事公开可访问要求) | ✅ |
 | D13-14 | 8.6-7 | 作品使用手册(已完成) + 小红书图文笔记(待发) | ⏳ |
-| **D15** | **8.9** | **提交 Qoder 赛道** | ⏳ |
+| **D15** | **8.9** | **提交 Qoder 赛道** | ✅ |
+| D16 | 8.9 | demo 叙事增强：3 个长文 Agent session + 评审引导 + 冷启动遮罩（v0.5.9） | ✅ |
 
 ## 🏆 参赛赛道
 
@@ -109,5 +124,5 @@ MIT
 ---
 
 *更新时间: 2026-07-28*  
-*版本 v0.5.6*  
+*版本 v0.5.9*  
 *部署平台: Railway*

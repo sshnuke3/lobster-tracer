@@ -68,7 +68,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.8',
+    version: '0.5.9',
     phase: 'D13-manual-and-demo',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
@@ -155,6 +155,32 @@ app.post('/analytics/transition', requireToken, express.json(), (req, res) => {
   res.json({ ok: true, id });
 });
 
+// D16: 长文 Agent 端到端 demo session —— 命中 Qoder 赛道叙事(多 Agent / 长时委派 / 自环检测)
+// 每相邻 phase 对 → 一条 state_transition 事件;多 Agent 场景在 payload 带 agent/model 徽标
+function seedLongAgentSession({ project, prompt, phases, durationMs, success, model, multiAgentMeta }) {
+  const finalPhase = phases[phases.length - 1];
+  const { id } = insertSession({
+    project,
+    phase: finalPhase,
+    prompt,
+    model: model || (multiAgentMeta ? multiAgentMeta[phases[1]]?.model : 'qwen3.6-flash'),
+    metadata: multiAgentMeta ? { multiAgent: true, agents: multiAgentMeta } : undefined
+  });
+  for (let i = 0; i < phases.length - 1; i++) {
+    const from = phases[i], to = phases[i + 1];
+    const agentInfo = multiAgentMeta ? multiAgentMeta[to] : null;
+    const payload = { from, to, reason: 'demo seed (long-agent)' };
+    if (agentInfo) { payload.agent = agentInfo.agent; payload.model = agentInfo.model; }
+    insertEvent({ sessionId: id, eventType: 'state_transition', payload });
+  }
+  insertEvent({ sessionId: id, eventType: 'chunk', payload: { text: `【${project}】……（示例长文产出）` } });
+  if (success) {
+    completeSession({ sessionId: id, response: `【${project}】……（示例长文产出）`, promptTokens: 1800, completionTokens: 6000, durationMs });
+  } else {
+    failSession({ sessionId: id, error: 'demo failure' });
+  }
+}
+
 // D7/D12.5: 注入示例工作流(状态机迁移 + 示例会话),让 dashboard 全饱满
 // 抽成 seedDemoData() 复用:POST /analytics/seed 手动触发,或 DEMO_MODE=1 启动时自动触发
 function seedDemoData() {
@@ -212,6 +238,31 @@ function seedDemoData() {
       failSession({ sessionId: id, error: ds.error || 'demo failure' });
     }
   }
+
+  // 3) 长文 Agent 端到端 session(评审引导用,命中 Qoder 赛道叙事)
+  seedLongAgentSession({
+    project: '长文Agent·成功路径回放',
+    prompt: '帮我写一篇 3000 字关于“AI Agent 时代开发者工作流变革”的长文',
+    phases: ['init', 'outline', 'outline_confirm', 'chapter_plan', 'chapter_gen', 'chapter_gen', 'chapter_gen', 'continue', 'verify', 'done'],
+    durationMs: 4800000, success: true, model: 'qwen3.6-flash'
+  });
+  seedLongAgentSession({
+    project: '长文Agent·失败+自环回放',
+    prompt: '写一篇关于“AI 与人类协作未来”的长文，初次大纲被用户打回 3 次',
+    phases: ['init', 'outline', 'outline_confirm', 'outline', 'outline', 'outline', 'outline_confirm', 'chapter_plan', 'chapter_gen', 'verify', 'done'],
+    durationMs: 6200000, success: true, model: 'qwen3.6-flash'
+  });
+  seedLongAgentSession({
+    project: '长文Agent·多Agent协作回放',
+    prompt: 'AI Agent 工具评测长文，3 个 Agent(outline / chapter_gen / verify)协作',
+    phases: ['init', 'outline', 'outline_confirm', 'chapter_plan', 'chapter_gen', 'chapter_gen', 'chapter_gen', 'continue', 'verify', 'done'],
+    durationMs: 5400000, success: true,
+    multiAgentMeta: {
+      outline:     { agent: 'outline_agent',     model: 'qwen3-max' },
+      chapter_gen: { agent: 'chapter_gen_agent', model: 'claude-sonnet' },
+      verify:      { agent: 'verify_agent',      model: 'qwen3-max' }
+    }
+  });
 }
 
 app.post('/analytics/seed', requireToken, (req, res) => {
