@@ -43,7 +43,8 @@ npm start
 | POST | `/analytics/seed` | 注入一条示例 xiaoshuo-cli 工作流(含 self-loop + error 恢复),demo 用 |
 | DELETE | `/analytics/transitions` | 清空真实迁移数据(demo 重置) |
 | POST | `/proxy/v1/chat/completions` | OpenAI 兼容 Stream Proxy(请求带 `metadata.phase` 会自动落 `init→phase` 迁移) |
-| GET | `/dashboard.html` | 📊 可视化调试面板(含"注入示例工作流"按钮) |
+| WS | `ws://host/` | 实时推送:落库即广播 chunk/状态变更事件,调试面板订阅后免轮询即时刷新(D8) |
+| GET | `/dashboard.html` | 📊 可视化调试面板(含"注入示例工作流"按钮 + 实时指示灯) |
 | GET | `/playground.html` | ▶ Stream Proxy 测试 / 会话历史 |
 
 ## 📅 开发甘特图
@@ -57,7 +58,8 @@ npm start
 | D5 | 7.30 | F3 状态机字段 + 阶段定义 | ✅ |
 | D6 | 7.31 | F3 状态机可视化(ECharts Sankey + 字符流时间线) | ✅ |
 | **D7** | **8.1** | **真实状态机迁移落库(transitions 表 + 聚合接口 + Sankey 切真实数据 + 示例注入)** | ✅ |
-| D8-D14 | 8.2-8 | WebSocket 实时推送 + 多会话聚合 + 鉴权 + 测试 + 录 demo | ⏳ |
+| **D8** | **8.2** | **WebSocket 实时推送(落库即广播,面板免轮询即时刷新 + 实时指示灯)** | ✅ |
+| D9-D14 | 8.3-8 | 多会话聚合 + 鉴权 + 测试 + 录 demo | ⏳ |
 | **D15** | **8.9** | **提交 Qoder 赛道** | ⏳ |
 
 ## 🏆 参赛赛道
@@ -79,5 +81,5 @@ MIT
 ---
 
 *更新时间: 2026-07-27*  
-*版本 v0.4.0*  
+*版本 v0.5.0*  
 *部署平台: Railway*

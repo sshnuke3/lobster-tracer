@@ -51,12 +51,17 @@
     .badge { font-size: 10px; padding: 2px 9px; border-radius: 10px; font-weight: 700; vertical-align: middle; margin-left: 6px; }
     .badge.real { background: #4CAF93; color: #fff; }
     .badge.reference { background: #FFB74D; color: #fff; }
+    .live { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #999; margin-right: 4px; }
+    .live-dot { width: 9px; height: 9px; border-radius: 50%; background: #ccc; transition: .2s; }
+    .live.on .live-dot { background: #4CAF93; box-shadow: 0 0 8px #4CAF93; }
+    .live.pulse .live-dot { background: #FF8B94; box-shadow: 0 0 8px #FF8B94; }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>🦞 Lobster-Tracer · 可视化调试面板</h1>
     <div class="nav">
+      <span id="liveWrap" class="live"><span class="live-dot"></span><span id="liveText">连接中…</span></span>
       <a href="/">首页</a>
       <a href="/playground.html">Playground</a>
       <a href="https://lobster-tracer-production.up.railway.app" target="_blank">公网</a>
@@ -92,6 +97,36 @@
 const sankey = echarts.init(document.getElementById('sankey'));
 const statusPie = echarts.init(document.getElementById('statusPie'));
 window.addEventListener('resize', () => { sankey.resize(); statusPie.resize(); });
+
+// D8: WebSocket 实时推送 —— 落库即推,面板无需轮询
+let currentSessionId = null;
+let ws, liveTimer;
+function connectWS() {
+  const live = document.getElementById('liveWrap');
+  try { ws = new WebSocket(`ws://${location.host}`); } catch { return; }
+  ws.onopen = () => { live.className = 'live on'; document.getElementById('liveText').textContent = '实时'; };
+  ws.onclose = () => { live.className = 'live'; document.getElementById('liveText').textContent = '已断开·重连中'; setTimeout(connectWS, 2000); };
+  ws.onerror = () => { live.className = 'live'; };
+  ws.onmessage = (e) => {
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.type === 'connected') return;
+    if (m.type === 'event') {
+      live.className = 'live pulse'; clearTimeout(liveTimer);
+      liveTimer = setTimeout(() => live.className = 'live on', 200);
+      // 当前打开的会话收到 chunk → 即时追加到日志(真正"正在发生"的现场感)
+      const p = m.payload || {};
+      if (p.sessionId === currentSessionId && p.eventType === 'chunk') appendLiveChunk(p.payload);
+    }
+  };
+}
+function appendLiveChunk(p) {
+  const logEl = document.querySelector('#detail .log');
+  if (!logEl) return;
+  const c = p?.content_delta ? `<span class="content">${escapeHtml(p.content_delta)}</span>` : '';
+  const r = p?.reasoning_delta ? `<span class="reason">[R] ${escapeHtml(p.reasoning_delta)}</span>` : '';
+  logEl.innerHTML += `#${p?.idx ?? '?'} ${c}${r}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
 
 async function loadStateMachine() {
   try {
@@ -170,6 +205,7 @@ async function loadSessions() {
 async function openSession(id) {
   document.querySelectorAll('.sess').forEach(el => el.classList.remove('active'));
   event.currentTarget.classList.add('active');
+  currentSessionId = id; // D8: 标记当前会话,WS 实时追加只针对它
   const detail = document.getElementById('detail');
   detail.innerHTML = '<div class="empty">加载中…</div>';
   try {
@@ -219,7 +255,7 @@ function renderLog(chunks) {
 }
 function escapeHtml(s) { return (s||'').replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
 
-loadStateMachine(); loadStatus(); loadSessions();
+loadStateMachine(); loadStatus(); loadSessions(); connectWS();
 </script>
 </body>
 </html>

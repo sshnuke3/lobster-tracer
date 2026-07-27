@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { initDB, listSessions, getSession, getStats, deleteSession, insertSession, insertEvent, insertTransition, getTransitionAggregate, hasRealTransitions, clearTransitions } from './db.js';
 import { handleProxy } from './proxy.js';
+import { setupWS } from './realtime.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -25,8 +26,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.4.0',
-    phase: 'D7-real-statemachine',
+    version: '0.5.0',
+    phase: 'D8-realtime-ws',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
   });
@@ -151,14 +152,16 @@ app.post('/sessions/:id/replay', async (req, res) => {
 // D2: Stream Proxy 路由
 app.post('/proxy/v1/chat/completions', handleProxy);
 
-app.listen(PORT, () => {
-  console.log(`\n🦞 Lobster-Tracer 启动成功 (D7)`);
+const server = app.listen(PORT, () => {
+  setupWS(server); // D8: WebSocket 挂在 http.Server 上,复用同端口实时推 chunk/状态变更到面板
+  console.log(`\n🦞 Lobster-Tracer 启动成功 (D8)`);
   console.log(`   http://localhost:${PORT}/health`);
   console.log(`   POST http://localhost:${PORT}/proxy/v1/chat/completions`);
   console.log(`   POST http://localhost:${PORT}/analytics/transition  (上报 phase 迁移)`);
   console.log(`   POST http://localhost:${PORT}/analytics/seed        (注入示例工作流)`);
-  console.log(`\nD7 验收:`);
+  console.log(`   ws://localhost:${PORT}                              (实时推送)`);
+  console.log(`\nD8 验收:`);
+  console.log(`   ✓ WebSocket 复用 HTTP 端口`);
+  console.log(`   ✓ 落库即广播,面板无需轮询即时刷新`);
   console.log(`   ✓ 真实状态机迁移落库(transitions 表)`);
-  console.log(`   ✓ /analytics/statemachine 有真实数据则返回聚合路径`);
-  console.log(`   ✓ Sankey 从"参考"切换为"真实"`);
 });

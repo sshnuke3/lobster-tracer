@@ -5,6 +5,7 @@ import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { broadcast } from './realtime.js';
 
 let db;
 
@@ -79,6 +80,8 @@ export function insertEvent({ sessionId, eventType, payload }) {
     INSERT INTO events (session_id, event_type, payload, created_at)
     VALUES (?, ?, ?, ?)
   `).run(sessionId, eventType, payload ? JSON.stringify(payload) : null, new Date().toISOString());
+  // D8: 落库即广播,让 WebSocket 客户端(调试面板)即时收到 —— 不去重、不节流,保真
+  try { broadcast('event', { sessionId, eventType, payload }); } catch { /* swallow */ }
 }
 
 // 完成 session
