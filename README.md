@@ -31,6 +31,19 @@ npm start
 # 访问 http://localhost:3000
 ```
 
+## 🔐 安全配置(公网部署必读)
+
+D9 起所有写接口、`/proxy` 与 WebSocket 均已带鉴权,但**默认不强制**——仅在设置了环境变量后生效(本地开发零配置):
+
+| 变量 | 作用 | 公网必设? |
+|---|---|---|
+| `ADMIN_TOKEN` | 写接口(`/proxy` + 5 个 analytics/delete/replay)与 WebSocket 的 Bearer / `?token=` 校验密钥 | **是** |
+| `WS_ALLOWED_ORIGIN` | WebSocket 仅允许的来源,防跨站订阅(如 `https://lobster-tracer-production.up.railway.app`) | 建议 |
+
+- **Railway**:Variables 加 `ADMIN_TOKEN`(强随机串)+ `WS_ALLOWED_ORIGIN`(前端域名)→ 重新部署即收口。
+- **本地**:`cp .env.example .env`(已被 `.gitignore` 忽略)填入 `ADMIN_TOKEN`,启动前 `set -a; . ./.env; set +a`(项目无 dotenv 自动加载)。
+- 启用 `ADMIN_TOKEN` 后,打开 dashboard 需带 `?token=你的ADMIN_TOKEN` 才能建立 WS 实时连接。
+
 ## 📡 API 端点
 
 | 方法 | 路径 | 说明 |
@@ -59,7 +72,11 @@ npm start
 | D6 | 7.31 | F3 状态机可视化(ECharts Sankey + 字符流时间线) | ✅ |
 | **D7** | **8.1** | **真实状态机迁移落库(transitions 表 + 聚合接口 + Sankey 切真实数据 + 示例注入)** | ✅ |
 | **D8** | **8.2** | **WebSocket 实时推送(落库即广播,面板免轮询即时刷新 + 实时指示灯)** | ✅ |
-| D9-D14 | 8.3-8 | 多会话聚合 + 鉴权 + 测试 + 录 demo | ⏳ |
+| **D9** | **8.2** | **安全加固:合并多份审计修复(鉴权/限流/XSS 全转义/WS token+心跳/错误脱敏,剔除通配 CORS)** | ✅ |
+| D10 | 8.3 | 多会话聚合分析(跨会话 token/phase/异常率统计,Fleet 可观测性) | ⏳ |
+| D11 | 8.4 | 收尾工程:LICENSE 文件 + 最小冒烟测试(修审计 #18 零测试) | ⏳ |
+| D12 | 8.5 | 一键导出诊断报告(Markdown / 小红书图文,对齐产品定位) | ⏳ |
+| D13-14 | 8.6-7 | 录 2-3min demo + 写 Qoder 赛道 pitch | ⏳ |
 | **D15** | **8.9** | **提交 Qoder 赛道** | ⏳ |
 
 ## 🏆 参赛赛道
@@ -81,5 +98,5 @@ MIT
 ---
 
 *更新时间: 2026-07-27*  
-*版本 v0.5.0*  
+*版本 v0.5.2*  
 *部署平台: Railway*
