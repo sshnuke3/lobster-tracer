@@ -11,6 +11,10 @@ import { insertSession, insertEvent, completeSession, failSession, insertTransit
 const OPENAI_API_BASE = process.env.OPENAI_API_BASE || 'https://api.openai.com/v1';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 
+// D21: 默认模型 + 禁用模型清单(主人要求:默认 qwen3.7-flash,禁止 qwen3.6-flash)
+const DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'qwen3.7-flash';
+const FORBIDDEN_MODELS = new Set(['qwen3.6-flash']);
+
 // 安全写日志:任何 DB 异常都不应中断对流式响应的转发(日志是副产物,响应才是主链路)
 function logEvent(sessionId, eventType, payload) {
   try { insertEvent({ sessionId, eventType, payload }); }
@@ -19,7 +23,12 @@ function logEvent(sessionId, eventType, payload) {
 
 export async function handleProxy(req, res) {
   const requestBody = req.body;
-  const model = requestBody?.model || 'unknown';
+  // D21: 缺省回退默认模型;若显式请求禁用模型则直接拒绝(硬拦截,真实推理链路生效)
+  const requestedModel = requestBody?.model || DEFAULT_MODEL;
+  if (FORBIDDEN_MODELS.has(requestedModel)) {
+    return res.status(400).json({ error: `model "${requestedModel}" is disabled` });
+  }
+  const model = requestedModel;
   const isStream = !!requestBody?.stream;
   const reqPhase = requestBody?.metadata?.phase || null;
 

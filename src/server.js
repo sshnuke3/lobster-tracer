@@ -78,8 +78,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.13',
-    phase: 'D20-life-demo',
+    version: '0.5.14',
+    phase: 'D21-default-model',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
   });
@@ -173,7 +173,7 @@ function seedLongAgentSession({ project, prompt, phases, durationMs, success, mo
     project,
     phase: finalPhase,
     prompt,
-    model: model || (multiAgentMeta ? multiAgentMeta[phases[1]]?.model : 'qwen3.6-flash'),
+    model: model || (multiAgentMeta ? multiAgentMeta[phases[1]]?.model : 'qwen3.7-flash'),
     metadata: multiAgentMeta ? { multiAgent: true, agents: multiAgentMeta } : undefined
   });
   for (let i = 0; i < phases.length - 1; i++) {
@@ -219,7 +219,7 @@ function seedDemoData() {
   // 2) 示例会话(让会话列表 / 聚合面板饱满:覆盖完成 / 进行中 / 失败三种状态)
   const demoSessions = [
     {
-      project: 'xiaoshuo-cli', model: 'qwen3.6-flash', phase: 'done', status: 'completed',
+      project: 'xiaoshuo-cli', model: 'qwen3.7-flash', phase: 'done', status: 'completed',
       prompt: '写一篇关于赛博朋克侦探的 3000 字短篇小说，先列大纲再逐章生成。',
       response: '霓虹在雨里晕开，他点燃最后一支烟……（示例正文）',
       promptTokens: 1280, completionTokens: 4200, durationMs: 38000
@@ -231,7 +231,7 @@ function seedDemoData() {
       promptTokens: 960, completionTokens: 3100, durationMs: 26000
     },
     {
-      project: 'report-gen', model: 'qwen3.6-flash', phase: 'error', status: 'failed',
+      project: 'report-gen', model: 'qwen3.7-flash', phase: 'error', status: 'failed',
       prompt: '根据 Q2 销售数据生成季度复盘报告。',
       response: null, error: 'upstream timeout (demo)',
       promptTokens: 540, completionTokens: 0, durationMs: 12000
@@ -254,13 +254,13 @@ function seedDemoData() {
     project: '写一篇 3000 字 AI 文章（顺畅完成）',
     prompt: '帮我写一篇 3000 字关于“AI Agent 时代开发者工作流变革”的长文',
     phases: ['init', 'outline', 'outline_confirm', 'chapter_plan', 'chapter_gen', 'chapter_gen', 'chapter_gen', 'continue', 'verify', 'done'],
-    durationMs: 4800000, success: true, model: 'qwen3.6-flash'
+    durationMs: 4800000, success: true, model: 'qwen3.7-flash'
   });
   seedLongAgentSession({
     project: '写作 Agent 卡壳实录：大纲被打回 3 次',
     prompt: '写一篇关于“AI 与人类协作未来”的长文，初次大纲被用户打回 3 次',
     phases: ['init', 'outline', 'outline_confirm', 'outline', 'outline', 'outline', 'outline_confirm', 'chapter_plan', 'chapter_gen', 'verify', 'done'],
-    durationMs: 6200000, success: true, model: 'qwen3.6-flash'
+    durationMs: 6200000, success: true, model: 'qwen3.7-flash'
   });
   seedLongAgentSession({
     project: 'AI 编辑部：三个 Agent 接力写文章',
@@ -295,7 +295,7 @@ function seedDemoData() {
     durationMs: 3300000, success: true,
     multiAgentMeta: {
       ask_pref: { agent: 'pref_agent',    model: 'qwen3-max' },
-      search:   { agent: 'search_agent',  model: 'qwen3.6-flash' },
+      search:   { agent: 'search_agent',  model: 'qwen3.7-flash' },
       plan:     { agent: 'planner_agent', model: 'claude-sonnet' },
       budget:   { agent: 'budget_agent',  model: 'qwen3-max' }
     }
@@ -332,7 +332,7 @@ app.post('/sessions/:id/replay', requireToken, async (req, res) => {
   // 复制原始 prompt + model + metadata
   const originalMeta = s.metadata ? (() => { try { return JSON.parse(s.metadata); } catch { return {}; } })() : {};
   req.body = {
-    model: s.model || 'qwen3.6-flash',
+    model: s.model || 'qwen3.7-flash',
     messages: [{ role: 'user', content: s.prompt }],
     stream: req.body?.stream ?? false,
     metadata: { ...originalMeta, replay_from: s.id, replay_at: new Date().toISOString() }
