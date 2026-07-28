@@ -78,8 +78,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.12',
-    phase: 'D19-submission-polish',
+    version: '0.5.13',
+    phase: 'D20-life-demo',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
   });
@@ -284,6 +284,20 @@ function seedDemoData() {
       analyze: { agent: 'analyzer_agent', model: 'qwen3-max' },
       review:  { agent: 'reviewer_agent', model: 'claude-sonnet' },
       fix:     { agent: 'fixer_agent',    model: 'qwen3-max' }
+    }
+  });
+  // D20: 生活类 demo —— 让非开发者评审/投票者一眼共鸣:AI 也能帮我规划旅行
+  // phase 路径 init→ask_pref→search→plan→budget→plan(预算超支重排自环)→done,与写作/代码流完全不同
+  seedLongAgentSession({
+    project: 'AI 旅行规划师：帮我安排 5 天东京游',
+    prompt: '帮我规划 5 天东京自由行：预算 ¥8000/人，喜欢动漫和美食，2 人行',
+    phases: ['init', 'ask_pref', 'search', 'plan', 'budget', 'plan', 'plan', 'done'],
+    durationMs: 3300000, success: true,
+    multiAgentMeta: {
+      ask_pref: { agent: 'pref_agent',    model: 'qwen3-max' },
+      search:   { agent: 'search_agent',  model: 'qwen3.6-flash' },
+      plan:     { agent: 'planner_agent', model: 'claude-sonnet' },
+      budget:   { agent: 'budget_agent',  model: 'qwen3-max' }
     }
   });
 }
