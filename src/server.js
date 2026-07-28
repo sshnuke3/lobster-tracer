@@ -78,8 +78,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.11',
-    phase: 'D18-agent-observability',
+    version: '0.5.12',
+    phase: 'D19-submission-polish',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
   });
@@ -183,9 +183,9 @@ function seedLongAgentSession({ project, prompt, phases, durationMs, success, mo
     if (agentInfo) { payload.agent = agentInfo.agent; payload.model = agentInfo.model; }
     insertEvent({ sessionId: id, eventType: 'state_transition', payload });
   }
-  insertEvent({ sessionId: id, eventType: 'chunk', payload: { text: `【${project}】……（示例长文产出）` } });
+  insertEvent({ sessionId: id, eventType: 'chunk', payload: { text: `【${project}】……（示例产出）` } });
   if (success) {
-    completeSession({ sessionId: id, response: `【${project}】……（示例长文产出）`, promptTokens: 1800, completionTokens: 6000, durationMs });
+    completeSession({ sessionId: id, response: `【${project}】……（示例产出）`, promptTokens: 1800, completionTokens: 6000, durationMs });
   } else {
     failSession({ sessionId: id, error: 'demo failure' });
   }
@@ -271,6 +271,19 @@ function seedDemoData() {
       outline:     { agent: 'outline_agent',     model: 'qwen3-max' },
       chapter_gen: { agent: 'chapter_gen_agent', model: 'claude-sonnet' },
       verify:      { agent: 'verify_agent',      model: 'qwen3-max' }
+    }
+  });
+  // D19: 非写作场景 demo —— 证明可观测性引擎不止服务长文,任何 Agent 工作流都能用
+  // phase 路径 init→analyze→review→fix→done 与写作流完全不同,点击该会话可见独立阶段迁移时间线
+  seedLongAgentSession({
+    project: '代码审查 Agent：自动 Review 并修 Bug',
+    prompt: '对一个 PR 做代码审查，发现隐患后自动开修复分支并提交',
+    phases: ['init', 'analyze', 'review', 'fix', 'done'],
+    durationMs: 2100000, success: true,
+    multiAgentMeta: {
+      analyze: { agent: 'analyzer_agent', model: 'qwen3-max' },
+      review:  { agent: 'reviewer_agent', model: 'claude-sonnet' },
+      fix:     { agent: 'fixer_agent',    model: 'qwen3-max' }
     }
   });
 }

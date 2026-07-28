@@ -114,10 +114,11 @@ npm test   # 运行 test/smoke.mjs —— 子进程起服务,自动校验 /healt
 | D12 | 8.5 | 残余安全加固(v3 审计报告):XSS + proxy 日志 + /sessions/:id 鉴权 | ✅ |
 | D12.5 | 8.5 | demo 自动 seed + 单一公开实例(DEMO_MODE,满足赛事公开可访问要求) | ✅ |
 | D13-14 | 8.6-7 | 作品使用手册(已完成) + 小红书图文笔记(待发) | ⏳ |
-| **D15** | **8.9** | **提交 Qoder 赛道** | ✅ |
+| **D15** | **8.9** | **提交 Qoder 赛道（表单待本人提交）** | ⏳ |
 | D16 | 8.9 | demo 叙事增强：3 个长文 Agent session + 评审引导 + 冷启动遮罩（v0.5.9） | ✅ |
 | D17 | 8.9 | 审计清零：playground 鉴权透传 + 限流防 XFF 伪造 + CSP 头 + 流式/非流超时闭环 + ECharts 本地化（v0.5.10） | ✅ |
 | D18 | 8.9 | 叙事重构：定位改"Agent 可观测性引擎" + demo 生活化命名 + 面板引导/中文对照 + 30 秒体验指南（v0.5.11） | ✅ |
+| D19 | 8.9 | 提交前收尾：加非写作代码审查 demo + C3 记忆叙事补强 + Qoder 集成说明 + 文档同步（v0.5.12） | ✅ |
 
 ## 🏆 参赛赛道
 
@@ -136,6 +137,20 @@ npm test   # 运行 test/smoke.mjs —— 子进程起服务,自动校验 /healt
 
 技术上的底气：undici 自写 OpenAI 兼容 Stream Proxy（不接 SDK）、真实工作流状态机、实战踩过的 self-loop / 断流案例、抓→存→查→可视化→异常检测完整闭环。
 
+### 🧠 记忆引擎：观测即沉淀（补强 C3 契合度）
+
+Lobster-Tracer 不止"看"，更是 Agent 工作流的**记忆底座**：`transitions` 表持久化每一次 phase 迁移（含 agent / model / 耗时），`sessions` 表留存完整 prompt / response，可随时回溯任意历史决策。跨会话聚合（`/analytics/aggregate`）把"哪个模型最耗 token、哪个 phase 最易卡死"提炼为组织级知识——这正是 Qoder 记忆与知识引擎的**可验证数据基础**。
+
+### 🔗 三步接入 Qoder Quest 模式
+
+Lobster-Tracer 通过 `/analytics/transition` API 上报每个 phase，与任何多 Agent 系统解耦集成（无需改 Qoder 源码）：
+
+1. Agent 每进入一个阶段，调用 `POST /analytics/transition` 上报 `{ from, to, reason, sessionId?, agent?, model? }`；
+2. 面板实时渲染 Sankey / 阶段迁移时间线，卡死自环自动高亮；
+3. 想观测别的 Agent 工作流，只需在 `PHASE_MACHINE.phases` 扩展阶段词表（如 `analyze` / `review` / `fix`），状态机与 Sankey 自动适配。
+
+> 示例 demo「代码审查 Agent：自动 Review 并修 Bug」即用 `init → analyze → review → fix → done` 路径，证明可观测性引擎不限于长文写作，所有 Agent 工作流都能用。
+
 ## 📜 License
 
 MIT
@@ -143,5 +158,5 @@ MIT
 ---
 
 *更新时间: 2026-07-28*  
-*版本 v0.5.11*  
+*版本 v0.5.12*  
 *部署平台: Railway*

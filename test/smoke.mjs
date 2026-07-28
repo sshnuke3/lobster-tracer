@@ -93,7 +93,7 @@ async function main() {
     j = await r.json();
     assert(r.status === 200 && j.ok, 'authorized -> 200');
 
-    console.log('7) GET /sessions (seed 后应 >=6: 3 基础 demo + 3 长文 Agent)');
+    console.log('7) GET /sessions (seed 后应 >=6: 3 基础 demo + 4 长文 Agent)');
     r = await fetch(`${BASE}/sessions?limit=100`);
     j = await r.json();
     assert(r.ok && Array.isArray(j.sessions), `/sessions -> 200 (count=${j.count})`);
