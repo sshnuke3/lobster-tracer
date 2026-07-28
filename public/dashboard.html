@@ -90,6 +90,13 @@
     </div>
   </div>
 
+  <div class="panel" style="margin-bottom:16px;padding:10px 16px;font-size:13px;color:#555;line-height:1.7">
+    🦞 <b>30 秒看懂这个面板</b>：下方 Sankey 图是 Agent 的完整工作流（<b>回环 = Agent 卡死信号</b>）→
+    左下会话列表点「<b>AI 编辑部：三个 Agent 接力写文章</b>」看多 Agent 协作时间线 →
+    点「<b>写作 Agent 卡壳实录</b>」看大纲被打回 3 次的自环 →
+    右上角「实时」灯亮表示 WebSocket 已连接，新事件落库即刷新。
+  </div>
+
   <div class="top">
     <div class="panel">
       <h2>状态机迁移 <span id="srcBadge" class="badge reference">示例</span></h2>
@@ -129,6 +136,13 @@
   </div>
 
 <script>
+// D18: phase 中文对照(评审友好) —— 仅展示层映射,不改数据
+const PHASE_ZH = {
+  init: '启动', outline: '想大纲', outline_confirm: '大纲确认', chapter_plan: '章节规划',
+  chapter_gen: '写章节', 'continue': '续写', verify: '校验', done: '完成', error: '出错'
+};
+function phaseLabel(p) { return PHASE_ZH[p] ? `${p} (${PHASE_ZH[p]})` : p; }
+
 const sankey = echarts.init(document.getElementById('sankey'));
 const statusPie = echarts.init(document.getElementById('statusPie'));
 const modelChart = echarts.init(document.getElementById('modelChart'));
@@ -182,8 +196,9 @@ async function loadStateMachine() {
     const data = m.transitions.map(t => ({ source: t.from, target: t.to, value: t.value, reasons: t.reasons || '' }));
     sankey.setOption({
       tooltip: { trigger: 'item', formatter: p => {
-        if (p.dataType !== 'edge') return p.name;
-        let s = `${p.data.source} → ${p.data.target}<br/>次数: ${p.data.value}`;
+        if (p.dataType !== 'edge') return phaseLabel(p.name);
+        let s = `${phaseLabel(p.data.source)} → ${phaseLabel(p.data.target)}<br/>次数: ${p.data.value}`;
+        if (p.data.source === p.data.target) s += '<br/>⚠️ 自环 = Agent 卡死信号';
         if (p.data.reasons) s += `<br/>原因: ${p.data.reasons.split(',').slice(0,3).join(' / ')}`;
         return s;
       } },
@@ -192,7 +207,7 @@ async function loadStateMachine() {
         nodeAlign: 'left',
         data: m.phases.map(p => ({ name: p, itemStyle: { color: p === 'error' ? '#E57373' : p === 'done' ? '#4CAF93' : '#FF8B94' } })),
         links: data,
-        label: { color: '#2A2A2A', fontSize: 11 },
+        label: { color: '#2A2A2A', fontSize: 11, formatter: p => phaseLabel(p.name) },
         lineStyle: { color: 'gradient', opacity: 0.45, curveness: 0.5 }
       }]
     });
@@ -309,7 +324,7 @@ function renderFlow(transitions) {
     const p = e.payload || {};
     const agent = p.agent ? `<span class="agent-badge">${escapeHtml(p.agent)}</span>` : '';
     const mdl = p.model ? `<span class="model-badge">${escapeHtml(p.model)}</span>` : '';
-    return `<div class="flow-step"><span class="phase">${escapeHtml(p.from || '?')}</span> → <span class="phase">${escapeHtml(p.to || '?')}</span>${agent}${mdl} <span class="reason">${escapeHtml(p.reason || '')}</span></div>`;
+    return `<div class="flow-step"><span class="phase">${escapeHtml(phaseLabel(p.from || '?'))}</span> → <span class="phase">${escapeHtml(phaseLabel(p.to || '?'))}</span>${agent}${mdl} <span class="reason">${escapeHtml(p.reason || '')}</span></div>`;
   }).join('');
 }
 function escapeHtml(s) {

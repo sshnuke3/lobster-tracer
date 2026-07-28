@@ -2,7 +2,7 @@
 
 > 赛道链接：https://survey.alibaba.com/apps/zhiliao/N-AebRVPx
 > 比赛页：https://hackathon2026.app.weavefox.cn/
-> 截止：2026-8-9 ｜ 当前代码版本 v0.5.10（commit 9c87a42，已 push；Railway 需 Redeploy 拉取）
+> 截止：2026-8-9 ｜ 当前代码版本 v0.5.11（D18 叙事重构；Railway 需 Redeploy 拉取）
 
 下面每一项对应表单一个字段。**方括号 `[...]` 是需要你本人填写的个人信息**，其余可直接复制。
 
@@ -15,7 +15,7 @@
 | 1 | 我已阅读并知晓大赛规则，确认参赛 | ☑ 勾选框 | ✅ 勾选 |
 | 2 | 我已知晓并同意，确认参赛 | ☑ 勾选框 | ✅ 勾选 |
 | 3 | 您的姓名/昵称 | 文本 0/100 | `[你的昵称 / 姓名]` |
-| 4 | 您的作品名称 | 文本 0/100 | `Lobster-Tracer` |
+| 4 | 您的作品名称 | 文本 0/100 | `Lobster-Tracer · AI Agent 可观测性引擎` |
 | 5 | 您的手机号 | 文本 0/100 | `[你的手机号]` |
 | 6 | 您的作品功能描述 | 文本 0/1000 | 见下方「功能描述原文」 |
 | 7 | 您的作品类型 | 单选 | **Web/H5** |
@@ -26,10 +26,18 @@
 
 ---
 
-## 二、功能描述原文（直接复制，约 320 字，远低于 1000 上限）
+## 二、功能描述原文（直接复制，约 700 字，低于 1000 上限）
 
 ```
-Lobster-Tracer 是一个 AI 长文工作流可视化调试器，给跑 LLM 长任务（小说生成、报告撰写、多 Agent 协作）的人当 DevTools 用。它实时抓取每次 LLM 调用的 prompt、产出与 token 消耗，把长任务的阶段迁移（大纲→章节生成→校验→完成）画成 ECharts Sankey 流程图，自动检测卡死信号（状态机 self-loop、流式断流、上游超时），并通过 WebSocket 实时推送，将多个会话聚合成可观测面板（总 token、失败率、各模型消耗、自环 Top、会话排行）。后端 Node.js 20 + Express + better-sqlite3，前端原生 HTML + ECharts，代理用 undici 自写 OpenAI 兼容 Stream Proxy，已通过多轮独立安全审计并闭环修复。
+【痛点】你让 AI Agent 写一篇 3000 字长文，它卡在哪一步？大纲改了 3 次你知道吗？3 个 Agent 接力时谁掉链子了？长任务跑下来，token 烧在哪一步？当 Agent 从"一句话问答"走向"长任务协作"，黑盒问题被放大 10 倍——你无法观测，就无法改进。
+
+【方案】Lobster-Tracer 是 AI Agent 工作流的可观测性引擎。它把 Agent 的每一次 LLM 调用、每一个状态迁移、每一次自环卡死，实时可视化成 Sankey 流程图 + 阶段迁移时间线 + 聚合面板。核心能力：① 状态机建模——Agent 工作流抽象为 phase 状态机，Sankey 图实时展示迁移路径；② 异常检测——自环卡死（Agent 反复生成同一内容）、断流、超时自动可视化；③ 多 Agent 可视化——每个阶段标注负责 Agent 与所用模型；④ 实时推送——WebSocket 落库即广播，面板免轮询即时刷新；⑤ Fleet 可观测性——跨会话聚合 token / 失败率 / 各模型消耗 / 自环 Top。
+
+【命中 Qoder 能力】Multi-Agent Collaboration → 协作过程可视化；Long-duration Execution → 长任务执行链路可观测；Memory & Knowledge → 每次 LLM 调用全量落库 + 状态机迁移持久化；理解→规划→执行→验证→迭代 → 完整闭环的状态机建模。Qoder 让 Agent 能做事，Lobster-Tracer 让你看清 Agent 在做什么。
+
+【技术亮点】undici 自写 OpenAI 兼容 Stream Proxy（SSE 跨包缓冲 + 真实 token 统计）；better-sqlite3 WAL + 全参数化查询；WebSocket 四层防护（连接上限/origin/token/心跳）；内存固定窗口限流 + trust proxy 反代适配；CSP 安全头 + ECharts 本地化零 CDN 依赖；多轮独立安全审计闭环 + 冒烟测试覆盖核心路径与鉴权。
+
+【体验入口】公网实例打开即用、无需注册，demo 自动灌数据（首访约 30-60s 冷启动，已加遮罩提示）。源代码 MIT 开源，含完整使用手册。
 ```
 
 ---
@@ -37,16 +45,16 @@ Lobster-Tracer 是一个 AI 长文工作流可视化调试器，给跑 LLM 长�
 ## 三、提交前必须做的 3 件事（影响评审有效性）
 
 1. **Railway 重新部署（重要）**
-   - 当前公网实例仍跑旧版，代码已到 **v0.5.10**（D17 审计清零；含 D14–D16 全部改动）。
-   - 去 Railway 控制台对 `lobster-tracer` 点 **Redeploy**，拉取最新 main（含 D14–D16），使全部修复与 demo 叙事上线。
-   - 验证：访问 `/dashboard.html` 看右上角版本号应为 `v0.5.10`。
+   - 当前公网实例跑 v0.5.10，代码已到 **v0.5.11**（D18 叙事重构：demo 生活化命名 + 面板引导 + phase 中文对照）。
+   - 去 Railway 控制台对 `lobster-tracer` 点 **Redeploy**，拉取最新 main。
+   - 验证：访问 `/health` 看 version 应为 `0.5.11`，会话列表出现「AI 编辑部：三个 Agent 接力写文章」等新命名。
 
 2. **确保 GitHub 仓库公开**
    - 提交链接 `https://github.com/sshnuke3/lobster-tracer` 必须 `Public`，否则评委无法访问源码。
    - 如仓库私有，在 GitHub 设置里改为 Public，或改为指向使用手册/演示页。
 
 3. **同步更新使用手册版本号（已完成）**
-   - `使用手册.md` 已同步到 **v0.5.10** / D17，版本一致，评委不会看到版本错配。
+   - `使用手册.md` 已同步到 **v0.5.11** / D18，版本一致，评委不会看到版本错配。
 
 ---
 
@@ -55,7 +63,7 @@ Lobster-Tracer 是一个 AI 长文工作流可视化调试器，给跑 LLM 长�
 | 要求 | 状态 | 说明 |
 |---|---|---|
 | 公网可访问链接 | ✅ | Railway demo，匿名可访问 |
-| 作品使用手册 | ✅ | `使用手册.md`，已同步 v0.5.10 |
+| 作品使用手册 | ✅ | `使用手册.md`，已同步 v0.5.11（含 30 秒体验指南） |
 | 小红书图文笔记（带 #外滩大会全民黑客松# #外滩大会AI Coding大赛#） | ⏳ 待发布 | 需在小红书发笔记并提交链接 |
 | Qoder 信息清单（本表单） | ⏳ 待提交 | 即本文件内容 |
 

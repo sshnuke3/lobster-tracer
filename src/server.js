@@ -78,8 +78,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.10',
-    phase: 'D13-manual-and-demo',
+    version: '0.5.11',
+    phase: 'D18-agent-observability',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
   });
@@ -251,19 +251,19 @@ function seedDemoData() {
 
   // 3) 长文 Agent 端到端 session(评审引导用,命中 Qoder 赛道叙事)
   seedLongAgentSession({
-    project: '长文Agent·成功路径回放',
+    project: '写一篇 3000 字 AI 文章（顺畅完成）',
     prompt: '帮我写一篇 3000 字关于“AI Agent 时代开发者工作流变革”的长文',
     phases: ['init', 'outline', 'outline_confirm', 'chapter_plan', 'chapter_gen', 'chapter_gen', 'chapter_gen', 'continue', 'verify', 'done'],
     durationMs: 4800000, success: true, model: 'qwen3.6-flash'
   });
   seedLongAgentSession({
-    project: '长文Agent·失败+自环回放',
+    project: '写作 Agent 卡壳实录：大纲被打回 3 次',
     prompt: '写一篇关于“AI 与人类协作未来”的长文，初次大纲被用户打回 3 次',
     phases: ['init', 'outline', 'outline_confirm', 'outline', 'outline', 'outline', 'outline_confirm', 'chapter_plan', 'chapter_gen', 'verify', 'done'],
     durationMs: 6200000, success: true, model: 'qwen3.6-flash'
   });
   seedLongAgentSession({
-    project: '长文Agent·多Agent协作回放',
+    project: 'AI 编辑部：三个 Agent 接力写文章',
     prompt: 'AI Agent 工具评测长文，3 个 Agent(outline / chapter_gen / verify)协作',
     phases: ['init', 'outline', 'outline_confirm', 'chapter_plan', 'chapter_gen', 'chapter_gen', 'chapter_gen', 'continue', 'verify', 'done'],
     durationMs: 5400000, success: true,

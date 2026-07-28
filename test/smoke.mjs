@@ -78,6 +78,12 @@ async function main() {
     j = await r.json();
     assert(r.status === 200 && j.ok, `seed ok (seeded=${j.seeded})`);
 
+    console.log('4b) GET /analytics/statemachine after seed -> source=real');
+    r = await fetch(`${BASE}/analytics/statemachine`);
+    j = await r.json();
+    // [D18/M-14] seed 后 Sankey 应切换到真实迁移数据源,而非回退参考状态机
+    assert(r.ok && j.source === 'real', `statemachine source=real after seed (got ${j.source})`);
+
     console.log('5) DELETE /analytics/transitions WITHOUT token -> 401');
     r = await fetch(`${BASE}/analytics/transitions`, { method: 'DELETE' });
     assert(r.status === 401, `unauthorized 401 (got ${r.status})`);

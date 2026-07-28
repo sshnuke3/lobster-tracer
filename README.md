@@ -1,30 +1,42 @@
 # 🦞 Lobster-Tracer
 
-> AI 长文工作流可视化调试器 — 像浏览器 DevTools 看网络请求一样,看 AI 的 prompt / token 流 / 状态机迁移
+> AI Agent 可观测性引擎 — 让多 Agent 协作的每一步决策透明可追溯
+> 可视化 · 异常检测 · 状态机建模 · 实时推送
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template)
 
 ## 🎯 产品定位
 
-给跑 LLM 长任务的人用的 DevTools:
-- 看 prompt / token 流(像 Chrome DevTools 的 Network)
-- 看状态机迁移(像 Chrome DevTools 的 State · ECharts Sankey)
-- 异常检测(断流/超时/重复/JSON 解析失败)
-- 一键导出诊断报告（Markdown / 小红书图文）— _规划中,见路线图_
+当 AI Agent 执行长任务（写长文、多轮协作、自动化工作流），你看不到它在做什么：
 
-## 🦞 评审引导（Hackathon · Qoder 赛道）
+- 哪个 Agent 在哪个阶段卡住反复重试？
+- 多个 Agent 接力时谁掉链子了？
+- 一个长任务跑下来，token 烧在哪一步？
 
-如果你只有 5 分钟，看这 3 个 session 就够了（打开 [公网实例](https://lobster-tracer-production.up.railway.app) → 左侧会话列表选其一 → 右侧看「阶段迁移时间线」+「字符流时间线」，下方全局 Sankey 展示完整状态机与自环卡死信号）：
+Lobster-Tracer 把 Agent 的每一次 LLM 调用、每一个状态迁移、每一次自环卡死，实时可视化成 **Sankey 流程图 + 阶段迁移时间线 + 聚合面板**。
 
-1. **「长文Agent·成功路径回放」** — 端到端目标闭环：`init → outline → chapter_gen ×3 → verify → done`
-2. **「长文Agent·失败+自环回放」** — 自环检测：大纲被用户打回 3 次，状态机里画出明显回环
-3. **「长文Agent·多Agent协作回放」** — 3 个 Agent（`outline_agent` / `chapter_gen_agent` / `verify_agent`）协作，每个 phase 标注所用模型
+**不再黑盒。**（辅助理解：它之于 Agent，就像 DevTools 之于网页——但定位是"Agent 运行就需要"的可观测性基础设施，不是"出了问题才用"的调试器。）
 
-**核心卖点（命中 Qoder 赛道能力）**：
-- 🧠 **Multi-Agent Collaboration** — 多 Agent 协作长任务，每个 phase 标注负责 Agent 与模型
-- 🎯 **Goal-Oriented Loop** — plan → execute → verify → iterate 完整闭环 + 自环卡死检测
-- 💾 **Memory & Rules** — 每次 LLM 调用全量落库 + WebSocket 实时广播（Agent 记忆持久化）
-- 👁️ **Comprehensive Context** — `/sessions/:id` 完整上下文（prompt / response / 阶段迁移 / Agent 元数据）
+## 🦞 评审引导（5 分钟体验路线）
+
+打开 [公网实例](https://lobster-tracer-production.up.railway.app/dashboard.html) → 面板已自动灌入 demo 数据，**无需注册/登录**。
+
+**第 1 步 · 看全局**
+- 下方 Sankey 状态机图展示 Agent 完整工作流：`init → outline → chapter_gen → verify → done`
+- 注意 `chapter_gen → chapter_gen` 的自环边 —— 这就是"Agent 卡死"的可视化
+
+**第 2 步 · 看多 Agent 协作**
+- 左侧点「AI 编辑部：三个 Agent 接力写文章」
+- 右侧「阶段迁移时间线」展示 3 个 Agent 接力：`outline_agent → chapter_gen_agent → verify_agent`
+- 每个节点标注负责 Agent 和所用模型（qwen3-max / claude-sonnet）
+
+**第 3 步 · 看异常检测**
+- 点「写作 Agent 卡壳实录：大纲被打回 3 次」
+- 大纲反复被打回 → Sankey 图里画出明显回环，聚合面板显示自环次数 Top —— Fleet 视角的 Agent 可观测性
+
+**第 4 步 · 看实时推送**
+- 右上角"实时"指示灯亮起 = WebSocket 已连接
+- 新的 Agent 执行事件落库即广播，面板免轮询即时刷新
 
 ## 🚀 公网链接
 
@@ -105,18 +117,24 @@ npm test   # 运行 test/smoke.mjs —— 子进程起服务,自动校验 /healt
 | **D15** | **8.9** | **提交 Qoder 赛道** | ✅ |
 | D16 | 8.9 | demo 叙事增强：3 个长文 Agent session + 评审引导 + 冷启动遮罩（v0.5.9） | ✅ |
 | D17 | 8.9 | 审计清零：playground 鉴权透传 + 限流防 XFF 伪造 + CSP 头 + 流式/非流超时闭环 + ECharts 本地化（v0.5.10） | ✅ |
+| D18 | 8.9 | 叙事重构：定位改"Agent 可观测性引擎" + demo 生活化命名 + 面板引导/中文对照 + 30 秒体验指南（v0.5.11） | ✅ |
 
 ## 🏆 参赛赛道
 
-**Qoder — AI 长文工作流可视化调试器 / 多 Agent 协作 / 长期委托**
+**Qoder — AI Agent 可观测性引擎 / 多 Agent 协作可视化 / 长期委托执行链路观测**
 
-## 💡 为什么 Lobster-Tracer 适合 Qoder 赛道
+## 💡 Lobster-Tracer × Qoder：补全 Agent 可观测性的最后一环
 
-1. **自己理解 OpenAI 兼容协议** — 用 undici 自写 Stream Proxy,不接 LangChain SDK
-2. **真实工作流数据** — xiaoshuo-cli phase 状态机直接搬过来当 demo(见 `/analytics/statemachine`)
-3. **真实异常检测** — 主人实战踩的 self-loop / stream 协议断点 = 真实案例;状态机里专门画了自环与 error 恢复
-4. **完整闭环** — 抓 → 存 → 查 → 可视化 → 异常检测 → 导出诊断报告
-5. **ECharts + Node.js** = Qoder 评委最熟悉的技术栈
+| Qoder 提供 | Lobster-Tracer 补全 |
+|---|---|
+| Multi-Agent 协作编排 | 协作过程的**可视化** —— 谁在什么阶段做了什么，一目了然 |
+| 长期委托执行 | 执行链路的**可观测性** —— 长任务卡在哪步、自环几次，实时可见 |
+| 记忆与知识引擎 | 记忆的**持久化验证** —— 每次 LLM 调用全量落库，Agent 记忆不丢失 |
+| 理解→规划→执行→验证→迭代 | 这个闭环的**状态机建模** —— Sankey 图把抽象流程变成可度量的迁移路径 |
+
+**Qoder 让 Agent 能做事。Lobster-Tracer 让你看清 Agent 在做什么。**
+
+技术上的底气：undici 自写 OpenAI 兼容 Stream Proxy（不接 SDK）、真实工作流状态机、实战踩过的 self-loop / 断流案例、抓→存→查→可视化→异常检测完整闭环。
 
 ## 📜 License
 
@@ -125,5 +143,5 @@ MIT
 ---
 
 *更新时间: 2026-07-28*  
-*版本 v0.5.10*  
+*版本 v0.5.11*  
 *部署平台: Railway*
