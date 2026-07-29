@@ -78,8 +78,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.18',
-    phase: 'D26-smoke-assertions',
+    version: '0.5.19',
+    phase: 'D27-issue03-visible',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
   });
@@ -105,7 +105,10 @@ app.get('/sessions/:id', requireToken, (req, res) => {
 // D5/D6: 状态机定义 + 阶段迁移(参考主人 xiaoshuo-cli 真实长文工作流)
 // 既含正常推进,也含 self-loop(大纲被打回/续写循环)与 error 恢复 —— 对应 README 的异常检测卖点
 const PHASE_MACHINE = {
-  phases: ['init', 'outline', 'outline_confirm', 'chapter_plan', 'chapter_gen', 'continue', 'verify', 'done', 'error'],
+  // D27: 白名单扩为「引擎可观测的全部 phase 词汇表」(写作 + 代码审查 + 旅行规划),
+  // 既用于 /analytics/transition 鉴权校验,也保证 reference Sankey 覆盖多域 demo
+  phases: ['init', 'outline', 'outline_confirm', 'chapter_plan', 'chapter_gen', 'continue', 'verify', 'done', 'error',
+           'analyze', 'review', 'fix', 'ask_pref', 'search', 'plan', 'budget'],
   transitions: [
     { from: 'init', to: 'outline', value: 12 },
     { from: 'outline', to: 'outline_confirm', value: 12 },
@@ -119,7 +122,17 @@ const PHASE_MACHINE = {
     { from: 'verify', to: 'done', value: 7 },
     { from: 'verify', to: 'continue', value: 1 },
     { from: 'error', to: 'chapter_gen', value: 1 },          // 异常恢复
-    { from: 'chapter_gen', to: 'chapter_gen', value: 2 }      // 卡死自环(demo seed 体现, R3-04 对齐)
+    { from: 'chapter_gen', to: 'chapter_gen', value: 2 },     // 卡死自环(demo seed 体现, R3-04 对齐)
+    // D27: 非写作域参考路径(让 reference Sankey 在清空真实数据后仍多域饱满)
+    { from: 'analyze', to: 'review', value: 4 },
+    { from: 'review', to: 'fix', value: 3 },
+    { from: 'fix', to: 'done', value: 3 },
+    { from: 'ask_pref', to: 'search', value: 3 },
+    { from: 'search', to: 'plan', value: 3 },
+    { from: 'plan', to: 'budget', value: 2 },
+    { from: 'budget', to: 'plan', value: 1 },                // 预算超支重排
+    { from: 'plan', to: 'plan', value: 1 },                  // 行程重排自环
+    { from: 'plan', to: 'done', value: 2 }
   ]
 };
 
@@ -167,7 +180,7 @@ app.post('/analytics/transition', requireToken, express.json(), (req, res) => {
 
 // D16: 长文 Agent 端到端 demo session —— 命中 Qoder 赛道叙事(多 Agent / 长时委派 / 自环检测)
 // 每相邻 phase 对 → 一条 state_transition 事件;多 Agent 场景在 payload 带 agent/model 徽标
-function seedLongAgentSession({ project, prompt, phases, durationMs, success, model, multiAgentMeta }) {
+function seedLongAgentSession({ project, prompt, phases, durationMs, success, model, multiAgentMeta, seedTransitions }) {
   const finalPhase = phases[phases.length - 1];
   const { id } = insertSession({
     project,
@@ -182,6 +195,9 @@ function seedLongAgentSession({ project, prompt, phases, durationMs, success, mo
     const payload = { from, to, reason: 'demo seed (long-agent)' };
     if (agentInfo) { payload.agent = agentInfo.agent; payload.model = agentInfo.model; }
     insertEvent({ sessionId: id, eventType: 'state_transition', payload });
+    // D27: 非写作 demo 的相邻 phase 对也落 transitions 表,使自环(如旅行 plan→plan)进入
+    // selfLoopByPhase → 回放建议命中精确 hint;写作会话靠 seedDemoData 的 steps 数组,避免双计
+    if (seedTransitions) insertTransition({ sessionId: id, from, to, reason: payload.reason });
   }
   insertEvent({ sessionId: id, eventType: 'chunk', payload: { text: `【${project}】……（示例产出）` } });
   if (success) {
@@ -279,7 +295,7 @@ function seedDemoData() {
     project: '代码审查 Agent：自动 Review 并修 Bug',
     prompt: '对一个 PR 做代码审查，发现隐患后自动开修复分支并提交',
     phases: ['init', 'analyze', 'review', 'fix', 'done'],
-    durationMs: 2100000, success: true,
+    durationMs: 2100000, success: true, seedTransitions: true,
     multiAgentMeta: {
       analyze: { agent: 'analyzer_agent', model: 'qwen3-max' },
       review:  { agent: 'reviewer_agent', model: 'claude-sonnet' },
@@ -292,7 +308,7 @@ function seedDemoData() {
     project: 'AI 旅行规划师：帮我安排 5 天东京游',
     prompt: '帮我规划 5 天东京自由行：预算 ¥8000/人，喜欢动漫和美食，2 人行',
     phases: ['init', 'ask_pref', 'search', 'plan', 'budget', 'plan', 'plan', 'done'],
-    durationMs: 3300000, success: true,
+    durationMs: 3300000, success: true, seedTransitions: true,
     multiAgentMeta: {
       ask_pref: { agent: 'pref_agent',    model: 'qwen3-max' },
       search:   { agent: 'search_agent',  model: 'qwen3.7-flash' },

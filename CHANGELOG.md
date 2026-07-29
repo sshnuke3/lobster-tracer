@@ -4,9 +4,19 @@
 
 本文件按版本汇总 D16–D21 的变更，技术语言已翻译成人话，每条说明「对用户/评委有什么用」。
 
-> ⚠️ 公网 demo（Railway）反映最近一次手动 Redeploy 的构建。代码已到 v0.5.18，如需最新特性请在 Railway 控制台对 `lobster-tracer` 点 **Redeploy** 拉取 `main`。
+> ⚠️ 公网 demo（Railway）反映最近一次手动 Redeploy 的构建。代码已到 v0.5.19，如需最新特性请在 Railway 控制台对 `lobster-tracer` 点 **Redeploy** 拉取 `main`。
 
 ---
+
+## v0.5.19 · D27 · ISSUE-03 可见化（非写作 demo 自环进入回放建议）
+
+### 🐛 修复（Trae issues 报告 ISSUE-03 · demo 可见版）
+- **根因**：`seedLongAgentSession()` 只把相邻 phase 对作为 `state_transition` **事件**写入，从未写 `transitions` 表；而 `transitions` 表此前只由写作域 `steps` 数组填充。旅游规划 demo 的 `plan→plan` 自环只存在于 session 的 phases 数组，**从没进 `transitions` 表**，导致 `selfLoopByPhase` 永远看不到它，回放建议对 `plan` 只能掉通用兜底文案——ISSUE-03 的担心在旧数据下确实成立。
+- **修复**：新增 `seedTransitions` 开关，让**非写作 demo 会话（代码审查 / 旅行规划）**把相邻 phase 对也落 `transitions` 表。旅行规划 `plan→plan` 自环入表后，`selfLoopByPhase` 命中 `plan`，回放建议直接显示 D25 加的精确 hint（"行程规划反复重排：建议把预算/偏好约束前置固化…"），不再掉通用兜底。
+- **白名单诚实化**：`PHASE_MACHINE.phases` 从「写作 9 相」扩为「引擎可观测全 phase 词汇表」(写作 + 代码审查 `analyze/review/fix` + 旅行 `ask_pref/search/plan/budget`)，既是 `/analytics/transition` 校验的词汇表，也保证 reference Sankey 覆盖多域；reference 边补了代码审查 + 旅行路径。
+
+### 为什么这事重要（评委视角）
+- ISSUE-03 报告担心"评委打开旅行规划 demo 却看到通用占位文案"。D25 只是字典补全（防御性），本 D27 让修复**在 demo 里立即可见**：点开聚合面板的「💡 回放建议」即出现 `plan` 的精确整改建议，证明可观测性引擎真的跨域生效，不是只能看长文。
 
 ## v0.5.18 · D26 · 测试兜底（ISSUE-02 回放建议断言 + ISSUE-01 seed 回归）
 
