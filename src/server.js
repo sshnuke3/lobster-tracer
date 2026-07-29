@@ -78,8 +78,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.15',
-    phase: 'D23-replay-suggestions',
+    version: '0.5.16',
+    phase: 'D24-proxy-hardening',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
   });

@@ -4,9 +4,19 @@
 
 本文件按版本汇总 D16–D21 的变更，技术语言已翻译成人话，每条说明「对用户/评委有什么用」。
 
-> ⚠️ 公网 demo（Railway）反映最近一次手动 Redeploy 的构建。代码已到 v0.5.15，如需最新特性请在 Railway 控制台对 `lobster-tracer` 点 **Redeploy** 拉取 `main`。
+> ⚠️ 公网 demo（Railway）反映最近一次手动 Redeploy 的构建。代码已到 v0.5.16，如需最新特性请在 Railway 控制台对 `lobster-tracer` 点 **Redeploy** 拉取 `main`。
 
 ---
+
+## v0.5.16 · D24 · 代理层健壮性加固（proxy hardening）
+
+### 🛡️ 修复（评审 🟡 中等项 M1 / M3 / M4）
+- **M1 · 字符流 x 轴计数语义修正**：`chunkCount` 从「按 TCP 包计数」改为「按 SSE 事件计数」（`proxy.js` 中将自增移入 `handleLine`）。单 TCP 包内多个 `data:` 行现在各自递增 idx，dashboard 字符流时间线 x 轴不再出现重复 idx。
+- **M3 · 会话终态写库加 try 保护**：`completeSession` / `failSession` 全部包进 `finishSession()` 保护器。DB 抖动（磁盘满 / 锁）不再让 session 永久卡在 `running`、也不再冒泡成 500 中断响应链路。
+- **M4 · `end`/`error` 竞态短路**：新增 `closed` 标志，流式结束时若 `error` 先到也不会把 completed 覆盖回 failed（反之亦然），杜绝重复写终态。
+
+### 为什么这事重要（评委视角）
+- 之前若 demo 时 DB 偶发抖动，session 会卡死、评委点开显示"running"破功；竞态也可能让完成态被错误翻转。这三项把"演示雷"提前排掉，且对生产部署同样有价值（多进程 zero-downtime 部署残留老进程时尤其明显）。
 
 ## v0.5.15 · D23 · 回放建议（从观测到指导）
 

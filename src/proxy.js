@@ -56,11 +56,20 @@ export async function handleProxy(req, res) {
 
   const startTime = Date.now();
 
+  // [D24/M3+M4] 会话终态写库保护器:try 兜底(防 DB 抖动让 session 卡 running) + closed 短路(防 end/error 竞态重复写)
+  let closed = false;
+  const finishSession = (finalize) => {
+    if (closed) return;
+    closed = true;
+    try { finalize(); }
+    catch (e) { console.error('[proxy] finishSession failed:', e.message); }
+  };
+
   // 2. 失败兜底
   if (!OPENAI_API_KEY) {
     cleanupTimeout();
     logEvent(sessionId, 'error', { reason: 'OPENAI_API_KEY missing' });
-    failSession({ sessionId, error: 'OPENAI_API_KEY missing' });
+    finishSession(() => failSession({ sessionId, error: 'OPENAI_API_KEY missing' }));
     console.error('[proxy] OPENAI_API_KEY missing');
     return res.status(500).json({ error: 'service configuration error' }); // [AUDIT #3] 不泄露部署平台/配置
   }
@@ -93,12 +102,12 @@ export async function handleProxy(req, res) {
     cleanupTimeout();
     if (err.name === 'AbortError') {
       logEvent(sessionId, 'error', { phase: 'upstream_request', error: 'stream timeout' });
-      failSession({ sessionId, error: 'stream timeout' });
+      finishSession(() => failSession({ sessionId, error: 'stream timeout' }));
       console.error('[proxy] upstream request timeout', sessionId);
       return res.status(504).json({ error: 'upstream request timeout' });
     }
     logEvent(sessionId, 'error', { phase: 'upstream_request', error: err.message });
-    failSession({ sessionId, error: err.message });
+    finishSession(() => failSession({ sessionId, error: err.message }));
     console.error('[proxy] upstream request failed:', err.message);
     return res.status(502).json({ error: 'upstream request failed' }); // [AUDIT #3] 不泄露上游网络细节
   }
@@ -122,12 +131,13 @@ export async function handleProxy(req, res) {
 
     const handleLine = (dataStr) => {
       if (!dataStr || dataStr === '[DONE]') return;
+      const idx = ++chunkCount;  // [D24/M1] 按 SSE-event 计数而非 TCP 包;EOF 尾部 flush 同样计
       try {
         const obj = JSON.parse(dataStr);
         const delta = obj.choices?.[0]?.delta || {};
         if (obj.usage) capturedUsage = obj.usage;
         logEvent(sessionId, 'chunk', {
-          idx: chunkCount,
+          idx,
           content_delta: delta.content || null,
           reasoning_delta: delta.reasoning_content || null,
           finish_reason: obj.choices?.[0]?.finish_reason || null,
@@ -146,7 +156,6 @@ export async function handleProxy(req, res) {
     upstreamResponse.body.on('data', (chunk) => {
       const chunkStr = chunk.toString();
       fullResponse += chunkStr;
-      chunkCount++;
       res.write(chunkStr);
 
       // D4: 按行缓冲,只处理完整的 `data:` 行;残余半行留到下次或流结束再冲刷
@@ -171,20 +180,22 @@ export async function handleProxy(req, res) {
         total_chunks: chunkCount, duration_ms: durationMs, usage: capturedUsage
       });
       // D4: token 统计用真实 usage;流式若无 usage 则 completion_tokens 记 0(不再用 chunk 数冒充)
-      completeSession({
+      // [D24/M3+M4] 终态写入包 try + closed 短路:DB 抖动不卡 running,end/error 竞态不重复写
+      finishSession(() => completeSession({
         sessionId,
         response: fullResponse,           // 完整存,不再 slice(0,1000)
         promptTokens: capturedUsage?.prompt_tokens || 0,
         completionTokens: capturedUsage?.completion_tokens || 0,
         durationMs
-      });
+      }));
       res.end();
       cleanupTimeout();
     });
 
     upstreamResponse.body.on('error', (err) => {
       logEvent(sessionId, 'error', { phase: 'streaming', error: err.message });
-      failSession({ sessionId, error: err.message });
+      // [D24/M3+M4] closed 短路:若 end 已先写终态,这里不再覆盖
+      finishSession(() => failSession({ sessionId, error: err.message }));
       res.end();
       cleanupTimeout();
     });
@@ -200,7 +211,7 @@ export async function handleProxy(req, res) {
       const isAbort = err.name === 'AbortError' || /abort/i.test(err.message || '');
       const msg = isAbort ? 'stream timeout' : err.message;
       logEvent(sessionId, 'error', { phase: 'nonstream_body', error: msg });
-      failSession({ sessionId, error: msg });
+      finishSession(() => failSession({ sessionId, error: msg }));
       console.error('[proxy] nonstream body read failed:', msg);
       return res.status(isAbort ? 504 : 502).json({ error: isAbort ? 'upstream request timeout' : 'upstream body read failed' });
     }
@@ -211,13 +222,14 @@ export async function handleProxy(req, res) {
 
     logEvent(sessionId, 'proxy_done', { duration_ms: durationMs, response_size: responseBody.length, usage: parsed.usage || null });
 
-    completeSession({
+    // [D24/M3] 终态写入包 try:DB 抖动也不让响应发送链路崩
+    finishSession(() => completeSession({
       sessionId,
       response: responseBody,            // 完整存,不再 slice(0,1000)
       promptTokens: parsed.usage?.prompt_tokens || 0,
       completionTokens: parsed.usage?.completion_tokens || 0,
       durationMs
-    });
+    }));
 
     res.setHeader('X-Session-Id', sessionId);
     res.status(upstreamResponse.statusCode).type('application/json').send(responseBody);
