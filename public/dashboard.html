@@ -94,6 +94,7 @@
     🦞 <b>30 秒看懂这个面板</b>：下方 Sankey 图是 Agent 的完整工作流（<b>回环 = Agent 卡死信号</b>）→
     左下会话列表点「<b>AI 编辑部：三个 Agent 接力写文章</b>」看多 Agent 协作时间线 →
     点「<b>写作 Agent 卡壳实录</b>」看大纲被打回 3 次的自环 →
+    滚到「<b>多会话聚合</b>」看各 phase 自环次数，下方「<b>💡 回放建议</b>」会按历史卡死数据直接给出优化 prompt 的整改建议 →
     右上角「实时」灯亮表示 WebSocket 已连接，新事件落库即刷新。
   </div>
 
@@ -120,6 +121,10 @@
       <div class="agg-grid">
         <div class="panel"><h2>各模型 token 消耗 (prompt/completion)</h2><div id="modelChart" class="chart" style="height:300px"></div></div>
         <div class="panel"><h2>各 phase 自环次数 <span style="font-size:11px;color:#E57373">(长任务卡死信号)</span></h2><div id="loopChart" class="chart" style="height:300px"></div></div>
+      </div>
+      <div class="panel" style="margin-top:16px" id="replayPanel">
+        <h2>💡 回放建议 <span class="badge" style="background:#E3F2FD;color:#1565C0">从观测到指导</span></h2>
+        <div id="replayTips"><div class="empty">暂无自环记录</div></div>
       </div>
       <div class="panel" style="margin-top:16px"><h2>Top 会话 token 排行</h2><div id="topChart" class="chart" style="height:280px"></div></div>
     </div>
@@ -379,6 +384,16 @@ async function loadAggregate() {
       yAxis: { type: 'value', name: '自环' },
       series: [{ type: 'bar', data: loops.map(l => l.n), itemStyle: { color: '#E57373' } }]
     });
+
+    // D23: 回放建议 —— 基于历史 self-loop 数据给出可行动优化提示(从观测→指导)
+    const tips = a.suggestions || [];
+    document.getElementById('replayTips').innerHTML = tips.length
+      ? tips.map(t => `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:8px 0;border:1px solid #E5E7EB;border-left:4px solid #FFB74D;border-radius:8px;background:#FFF8E1">
+          <span style="font-weight:700;color:#E65100;white-space:nowrap">${escapeHtml(t.phase)}</span>
+          <span style="font-size:12px;color:#E57373;white-space:nowrap">卡死 ${t.count} 次</span>
+          <div style="font-size:13px;color:#374151;line-height:1.5">${escapeHtml(t.hint)}</div>
+        </div>`).join('')
+      : '<div class="empty">暂无自环记录,暂无建议</div>';
 
     // Top 会话 token 排行(横向)
     const top = a.topSessions || [];

@@ -18,7 +18,7 @@
 | 4 | 您的作品名称 | 文本 0/100 | `Lobster-Tracer · AI Agent 可观测性引擎` |
 | 5 | 您的手机号 | 文本 0/100 | `[你的手机号]` |
 | 6 | 您的作品功能描述 | 文本 0/1000 | 见下方「功能描述原文」 |
-| 7 | 您的作品类型 | 单选 | **Web/H5** |
+| 7 | 您的作品类型 | 单选 | **AI Agent**（评审 8.8/10 明确建议:更贴合 Qoder 赛道调性;与作品名"AI Agent 可观测性引擎"自洽） |
 | 8 | 您的作品公网访问链接 | 文本 0/100 | `https://lobster-tracer-production.up.railway.app/dashboard.html` |
 | 9 | 您的作品源代码或演示材料链接 | 文本 0/100 | `https://github.com/sshnuke3/lobster-tracer`（含使用手册.md） |
 | 10 | 您的邮箱（绑定Qoder账号） | 文本 0/100 | `[你绑定 Qoder 的邮箱]` |
@@ -45,8 +45,8 @@
 ## 三、提交前必须做的 3 件事（影响评审有效性）
 
 1. **Railway 重新部署（待你点）**
-   - 当前公网实例仍为 **v0.5.12**（D19）。D20 生活类 demo（AI 旅行规划师）已 push 到最新 main，但 Railway **不会自动部署**（auto-deploy 关闭，已在 D15/D19 实测确认）。
-   - 去 Railway 控制台对 `lobster-tracer` 点 **Redeploy**，拉取最新 main；验证 `/health` version=`0.5.13` 且会话列表出现「AI 旅行规划师：帮我安排 5 天东京游」。
+   - 当前 main 已到 **v0.5.15**（D23，含「回放建议」功能）。公网实例仍为旧版本（Railway auto-deploy 关闭，需手动 Redeploy，已在 D15/D19 实测确认）。
+   - 去 Railway 控制台对 `lobster-tracer` 点 **Redeploy**，拉取最新 main；验证 `/health` version=`0.5.15`，会话列表出现「AI 旅行规划师：帮我安排 5 天东京游」，且聚合面板出现「💡 回放建议」卡片。
 
 2. **确保 GitHub 仓库公开**
    - 提交链接 `https://github.com/sshnuke3/lobster-tracer` 必须 `Public`，否则评委无法访问源码。

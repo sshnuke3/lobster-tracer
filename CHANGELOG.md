@@ -1,10 +1,24 @@
 # 📝 Lobster-Tracer 发布说明（Release Notes）
 
-> 一句话更新文案：Lobster-Tracer 已升级为「AI Agent 可观测性引擎」——新增生活类 demo、代码审查 demo、默认模型切到 qwen3.7-flash，并彻底禁用 qwen3.6-flash。
+> 一句话更新文案：Lobster-Tracer 已升级为「AI Agent 可观测性引擎」——新增生活类 demo、代码审查 demo、默认模型切到 qwen3.7-flash、彻底禁用 qwen3.6-flash，并在聚合面板新增「回放建议」把自环卡死经验转化为可行动优化建议。
 
 本文件按版本汇总 D16–D21 的变更，技术语言已翻译成人话，每条说明「对用户/评委有什么用」。
 
-> ⚠️ 公网 demo（Railway）反映最近一次手动 Redeploy 的构建。代码已到 v0.5.14，如需最新特性请在 Railway 控制台对 `lobster-tracer` 点 **Redeploy** 拉取 `main`。
+> ⚠️ 公网 demo（Railway）反映最近一次手动 Redeploy 的构建。代码已到 v0.5.15，如需最新特性请在 Railway 控制台对 `lobster-tracer` 点 **Redeploy** 拉取 `main`。
+
+---
+
+## v0.5.15 · D23 · 回放建议（从观测到指导）
+
+### ✨ 新功能
+- **聚合面板新增「💡 回放建议」卡片**：基于历史 `self-loop` 数据，自动给每个曾卡死的 phase 生成可行动整改建议（如 `chapter_gen` 卡死 N 次 → "建议拆分章节粒度 / 设 max_retries 上限"）。
+- 每条建议由已持久化的 `transitions` 历史推导，无需人工配置，开箱即有（demo 数据含自环，评委点开即见）。
+
+### 为什么这事重要（命中 Qoder 记忆引擎 C3）
+- 之前 Lobster-Tracer 只"观测"自环卡死；现在它能把历史卡死经验**转化为指导执行的建议**，补齐了评审点名的 C3 最弱项（原 5/10），从"看清 Agent 在做什么"进到"告诉 Agent 怎么改"。
+
+### 对用户意味着什么
+- 不再只是冷冰冰的"卡死 N 次"图表，而是直接告诉你"下一个 Agent 任务该怎么优化 prompt"。
 
 ---
 
