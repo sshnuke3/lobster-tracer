@@ -4,9 +4,19 @@
 
 本文件按版本汇总 D16–D21 的变更，技术语言已翻译成人话，每条说明「对用户/评委有什么用」。
 
-> ⚠️ 公网 demo（Railway）反映最近一次手动 Redeploy 的构建。代码已到 v0.5.16，如需最新特性请在 Railway 控制台对 `lobster-tracer` 点 **Redeploy** 拉取 `main`。
+> ⚠️ 公网 demo（Railway）反映最近一次手动 Redeploy 的构建。代码已到 v0.5.17，如需最新特性请在 Railway 控制台对 `lobster-tracer` 点 **Redeploy** 拉取 `main`。
 
 ---
+
+## v0.5.17 · D25 · 评审 issues 修复（3 处 open 项清零）
+
+### 🛡️ 修复（Trae issues 报告 ISSUE-01 / 03 + 自评 stale 项）
+- **ISSUE-03 · 回放建议 hint 字典补全**：`REPLAY_HINTS` 从仅 6 个写作 phase，扩展到覆盖代码审查 demo（`analyze` / `review` / `fix`）与旅行规划 demo（`ask_pref` / `search` / `plan` / `budget`）。评委打开非写作 demo 的自环卡死，现在看到的是针对性整改建议，而非通用兜底文案。
+- **ISSUE-01 · `/analytics/seed` 缺 `seeded` 字段**：seed 路由现返回 `{ ok: true, seeded: listSessions().length }`，smoke 测试中 `assert(j.seeded)` 不再拿到 `undefined`。
+- **首页 phase grid 校正**：`index.html` 的 `D7-D21` → `D7-D24`，与顶部 badge（已是 D24）自洽，并补述「代码审查 demo + 旅行规划 demo + 回放建议 + 代理层加固」。
+
+### 为什么这事重要（评委视角）
+- `REPLAY_HINTS` 缺口是这份报告里唯一「评委打开即见效」的硬伤——旅行规划 demo 的 `plan→plan` 预算超支自环，修复前只会显示"该阶段历史上卡死 N 次"的通用话术。现在命中即给"把预算硬约束前置进 planner"的精确建议，直接强化 Qoder 记忆引擎叙事。
 
 ## v0.5.16 · D24 · 代理层健壮性加固（proxy hardening）
 

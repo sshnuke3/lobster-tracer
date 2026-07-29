@@ -78,8 +78,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.16',
-    phase: 'D24-proxy-hardening',
+    version: '0.5.17',
+    phase: 'D25-issues-fix',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
   });
@@ -304,7 +304,7 @@ function seedDemoData() {
 
 app.post('/analytics/seed', requireToken, (req, res) => {
   seedDemoData();
-  res.json({ ok: true });
+  res.json({ ok: true, seeded: listSessions().length });
 });
 
 // D7: 清空真实迁移数据(demo 重置)

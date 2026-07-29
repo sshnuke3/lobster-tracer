@@ -266,11 +266,22 @@ export function getAggregateStats() {
   // D23: 回放建议 —— 把"观测到的自环卡死"转化为可行动优化建议(从观测→指导, 命中 Qoder 记忆引擎"用历史经验改进执行")
   // 每个曾出现自环的 phase 给一条针对性提示;数据全部来自已持久化的 transitions 历史
   const REPLAY_HINTS = {
+    // 写作类 phase
     chapter_gen: '长文生成反复重写:建议拆分章节粒度、给更明确的大纲约束,或在调用层设 max_retries 上限防失控',
     outline: '大纲阶段自环:建议在生成前预置评审 Checklist,或一次产出多版供人工挑选',
     outline_confirm: '大纲被打回循环:建议把"被打回原因"结构化回写 prompt,减少来回',
     continue: '续写循环:建议引入完成度自检阈值,达到即进入 verify',
-    verify: '验证反复不通过:建议明确通过/不通过判据,避免主观反复',
+    verify: '验证反复不通过:建议明确通过与不通过判据,避免主观反复',
+    // 代码审查类 phase (D19 demo)
+    analyze: '分析阶段自环:建议给审查范围与上下文清单上界,避免 analyzer 反复重读',
+    review: '审查阶段自环:建议预置 Issue 分级标准(severity 阈值),达到即通过',
+    fix: '修复阶段自环:建议把"修复验证失败原因"回写 fixer,或引入最小可编译步长',
+    // 旅行规划类 phase (D20 demo)
+    ask_pref: '偏好询问自环:建议一次问齐预算/兴趣/人数等结构化字段,减少来回确认',
+    search: '目的地检索自环:建议设检索轮次上限,或先给候选池再让用户挑选',
+    plan: '行程编排自环(常见:预算超支重排):建议把预算硬约束前置进 planner,超支即剪枝而非反复重排',
+    budget: '预算核算自环:建议明确"超支即降级选项"规则,避免与 plan 来回拉扯',
+    // 通用
     init: '初始化自环:检查入口参数与上下文拼接是否稳定'
   };
   const suggestions = (selfLoopByPhase || [])
