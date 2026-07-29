@@ -67,6 +67,11 @@ async function main() {
     assert(typeof j.transitions?.self_loops === 'number', `aggregate transitions.self_loops=${j.transitions?.self_loops}`);
     assert(Array.isArray(j.byModel), 'aggregate byModel is array');
     assert(Array.isArray(j.topSessions), 'aggregate topSessions is array');
+    // [ISSUE-02] D23 回放建议回归: seed 后 suggestions 必须存在且非空(自环数据已灌入 transitions 表)
+    assert(Array.isArray(j.suggestions), 'aggregate suggestions is array (D23 replay-suggestions)');
+    assert(j.suggestions.length > 0, `aggregate suggestions non-empty (got ${j.suggestions.length}, 应有自环卡死建议)`);
+    const bad = j.suggestions.find(s => !s.phase || typeof s.count !== 'number' || !s.hint);
+    assert(!bad, 'aggregate each suggestion has phase/count/hint');
 
     console.log('3) GET /analytics/statemachine');
     r = await fetch(`${BASE}/analytics/statemachine`);
@@ -77,6 +82,8 @@ async function main() {
     r = await fetch(`${BASE}/analytics/seed`, { method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` } });
     j = await r.json();
     assert(r.status === 200 && j.ok, `seed ok (seeded=${j.seeded})`);
+    // [ISSUE-01] D25 修复回归: /analytics/seed 必须返回 numeric seeded 字段(smoke 旧断言引用 j.seeded 原拿到 undefined)
+    assert(typeof j.seeded === 'number' && j.seeded > 0, `seed returns numeric seeded count (got ${j.seeded})`);
 
     console.log('4b) GET /analytics/statemachine after seed -> source=real');
     r = await fetch(`${BASE}/analytics/statemachine`);

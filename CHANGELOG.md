@@ -4,9 +4,19 @@
 
 本文件按版本汇总 D16–D21 的变更，技术语言已翻译成人话，每条说明「对用户/评委有什么用」。
 
-> ⚠️ 公网 demo（Railway）反映最近一次手动 Redeploy 的构建。代码已到 v0.5.17，如需最新特性请在 Railway 控制台对 `lobster-tracer` 点 **Redeploy** 拉取 `main`。
+> ⚠️ 公网 demo（Railway）反映最近一次手动 Redeploy 的构建。代码已到 v0.5.18，如需最新特性请在 Railway 控制台对 `lobster-tracer` 点 **Redeploy** 拉取 `main`。
 
 ---
+
+## v0.5.18 · D26 · 测试兜底（ISSUE-02 回放建议断言 + ISSUE-01 seed 回归）
+
+### 🧪 测试（Trae issues 报告 ISSUE-02 / 顺带锁 ISSUE-01）
+- **ISSUE-02 · 回放建议回归**：`test/smoke.mjs` 对 `GET /analytics/aggregate` 新增 3 条断言——`suggestions` 必须是数组、必须非空、且每条 suggestion 含 `phase/count/hint` 三字段。D23 的回放建议功能从此不被静默改坏。
+- **ISSUE-01 · seed 回归**：对 `POST /analytics/seed` 新增断言——返回 `seeded` 必须是 `>0` 的数字，锁死 D25 修复，避免字段被悄悄删掉又回到 `undefined`。
+- `npm test` 实测全过（含新增 4 断言）；当前 `suggestions` 非空条数为 1（写作类 `chapter_gen` 自环，符合 `transitions` 表白名单只含写作 phase 的事实）。
+
+### 为什么这事重要（评委视角）
+- 评审 issues 报告点名 smoke 缺 `suggestions` 断言，等于"功能上线但无人看守"。补上后，任何让回放建议失效的代码改动会在 CI 立刻红，不会带病进提交。
 
 ## v0.5.17 · D25 · 评审 issues 修复（3 处 open 项清零）
 
