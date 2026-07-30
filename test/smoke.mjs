@@ -67,11 +67,9 @@ async function main() {
     assert(typeof j.transitions?.self_loops === 'number', `aggregate transitions.self_loops=${j.transitions?.self_loops}`);
     assert(Array.isArray(j.byModel), 'aggregate byModel is array');
     assert(Array.isArray(j.topSessions), 'aggregate topSessions is array');
-    // [ISSUE-02] D23 回放建议回归: seed 后 suggestions 必须存在且非空(自环数据已灌入 transitions 表)
+    // [ISSUE-02] D23 回放建议回归: suggestions 类型断言(seed 前可为空数组,仅校验类型)
+    // [REG-01 修复] 非空断言移至步骤 4b 之后(seed 灌入 transitions 自环数据后才应非空)
     assert(Array.isArray(j.suggestions), 'aggregate suggestions is array (D23 replay-suggestions)');
-    assert(j.suggestions.length > 0, `aggregate suggestions non-empty (got ${j.suggestions.length}, 应有自环卡死建议)`);
-    const bad = j.suggestions.find(s => !s.phase || typeof s.count !== 'number' || !s.hint);
-    assert(!bad, 'aggregate each suggestion has phase/count/hint');
 
     console.log('3) GET /analytics/statemachine');
     r = await fetch(`${BASE}/analytics/statemachine`);
@@ -90,6 +88,14 @@ async function main() {
     j = await r.json();
     // [D18/M-14] seed 后 Sankey 应切换到真实迁移数据源,而非回退参考状态机
     assert(r.ok && j.source === 'real', `statemachine source=real after seed (got ${j.source})`);
+
+    console.log('4c) GET /analytics/aggregate after seed -> suggestions 非空');
+    r = await fetch(`${BASE}/analytics/aggregate`);
+    j = await r.json();
+    // [REG-01 修复] 非空断言移至此处(seed 后 transitions 表有自环数据,suggestions 应非空)
+    assert(j.suggestions.length > 0, `suggestions non-empty after seed (got ${j.suggestions.length})`);
+    const bad = j.suggestions.find(s => !s.phase || typeof s.count !== 'number' || !s.hint);
+    assert(!bad, 'aggregate each suggestion has phase/count/hint');
 
     console.log('5) DELETE /analytics/transitions WITHOUT token -> 401');
     r = await fetch(`${BASE}/analytics/transitions`, { method: 'DELETE' });
