@@ -79,7 +79,7 @@ app.get('/health', (req, res) => {
     status: 'ok',
     service: 'lobster-tracer',
     version: '0.5.20',
-    phase: 'D27-issue03-visible',
+    phase: 'D28-reg01-fixed',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
   });
