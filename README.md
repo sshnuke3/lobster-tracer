@@ -2,7 +2,7 @@
 
 > **AI Agent 可观测性引擎** — 让多 Agent 协作的每一步决策透明、可追溯。
 
-[![Version](https://img.shields.io/badge/version-0.5.14-blue)](https://github.com/sshnuke3/lobster-tracer)
+[![Version](https://img.shields.io/badge/version-0.5.20-blue)](https://github.com/sshnuke3/lobster-tracer)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
 [![Demo](https://img.shields.io/badge/demo-online-brightgreen)](https://lobster-tracer-production.up.railway.app)
@@ -171,4 +171,4 @@ npm test   # 运行 test/smoke.mjs —— 自动校验 /health /aggregate /state
 
 ---
 
-*更新时间: 2026-07-29 · 版本 v0.5.14 · 部署平台: Railway*
+*更新时间: 2026-07-30 · 版本 v0.5.20 · 部署平台: Railway*

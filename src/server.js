@@ -78,7 +78,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'lobster-tracer',
-    version: '0.5.19',
+    version: '0.5.20',
     phase: 'D27-issue03-visible',
     timestamp: new Date().toISOString(),
     db_stats: getStats()
